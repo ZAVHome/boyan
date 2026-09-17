@@ -16,3 +16,6 @@
 | **08** | [08_stage3_walkthrough.md](08_stage3_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 3 (REST API Gateway, JWT, Watcher fsnotify, дедупликация, 5.7 МБ RAM в WSL2). |
 | **09** | [09_stage4_implementation_plan.md](09_stage4_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 4: Web Desktop Frontend (SPA на Vue 3, Vite, Tailwind CSS, TypeScript, Pinia, онлайн-читалка, модерация карантина и 4 темы). |
 | **10** | [10_stage4_walkthrough.md](10_stage4_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 4 (Web Desktop SPA, универсальная читалка FB2/EPUB, темы Light/Dark/OLED/Sepia, браузерные тесты). |
+| **11** | [11_stage5_implementation_plan.md](11_stage5_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 5: Web Mobile PWA Frontend (Touch-first PWA, E-Ink режим, IndexedDB офлайн-чтение, свайпы и жесты). |
+| **12** | [12_stage5_walkthrough.md](12_stage5_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 5 (Touch-first PWA, 5 тем включая E-Ink без анимаций, IndexedDB офлайн-библиотека, мобильная читалка FB2/EPUB). |
+

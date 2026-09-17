@@ -1,0 +1,63 @@
+/* Стили мобильной читалки */
+
+.mobile-reader-content {
+  color: var(--text-primary);
+  line-height: var(--reader-line-height, 1.6);
+  font-size: var(--reader-font-size, 17px);
+  padding: 1rem 0;
+}
+
+.mobile-reader-content.font-serif {
+  font-family: 'Lora', Georgia, serif;
+}
+
+.mobile-reader-content.font-sans {
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+.mobile-reader-content.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.mobile-reader-content h1,
+.mobile-reader-content h2,
+.mobile-reader-content h3 {
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.mobile-reader-content h1 {
+  font-size: 1.5em;
+  text-align: center;
+}
+
+.mobile-reader-content h2 {
+  font-size: 1.25em;
+  text-align: center;
+}
+
+.mobile-reader-content p {
+  margin-bottom: 0.75em;
+  text-align: justify;
+  text-indent: 1.25em;
+  hyphens: auto;
+}
+
+.mobile-reader-content blockquote {
+  margin: 1rem 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--accent);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.mobile-reader-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem auto;
+  display: block;
+  border-radius: 4px;
+}
