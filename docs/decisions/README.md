@@ -18,4 +18,6 @@
 | **10** | [10_stage4_walkthrough.md](10_stage4_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 4 (Web Desktop SPA, универсальная читалка FB2/EPUB, темы Light/Dark/OLED/Sepia, браузерные тесты). |
 | **11** | [11_stage5_implementation_plan.md](11_stage5_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 5: Web Mobile PWA Frontend (Touch-first PWA, E-Ink режим, IndexedDB офлайн-чтение, свайпы и жесты). |
 | **12** | [12_stage5_walkthrough.md](12_stage5_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 5 (Touch-first PWA, 5 тем включая E-Ink без анимаций, IndexedDB офлайн-библиотека, мобильная читалка FB2/EPUB). |
+| **13** | [13_stage6_implementation_plan.md](13_stage6_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 6: Импорт библиотек Calibre (`metadata.db`) и автономный двусторонний Telegram-бот (поиск, скачивание и приём входящих книг). |
+| **14** | [14_stage6_walkthrough.md](14_stage6_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 6 (Calibre Importer, REST API, двусторонний Telegram-бот, развертывание в WSL2, 4.5 МБ RAM). |
 

@@ -13,8 +13,10 @@ import (
 
 	"boyan/internal/api"
 	"boyan/internal/config"
+	"boyan/internal/importer/calibre"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
+	"boyan/internal/telegram"
 	"boyan/internal/watcher"
 )
 
@@ -22,12 +24,14 @@ const Version = "0.1.0"
 
 func main() {
 	var (
-		configPath  string
-		showVersion bool
+		configPath        string
+		showVersion       bool
+		importCalibrePath string
 	)
 
 	flag.StringVar(&configPath, "config", "config.yaml", "Path to YAML configuration file")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
+	flag.StringVar(&importCalibrePath, "import-calibre", "", "Path to Calibre library directory to import and exit")
 	flag.Parse()
 
 	if showVersion {
@@ -93,7 +97,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 7. Инициализация демона автоимпорта (Watcher)
+	// 7. Однократный запуск импорта Calibre через CLI флаг
+	if importCalibrePath != "" {
+		slog.Info("Running Calibre library import CLI", "path", importCalibrePath)
+		imp := calibre.NewImporter(cfg, bookRepo, coverCache)
+		stats, err := imp.ImportLibrary(ctx, importCalibrePath, calibre.ImportOptions{CopyFiles: true})
+		if err != nil {
+			slog.Error("Calibre import failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Calibre import completed: %d total, %d imported, %d formats attached, %d skipped, %d errors\n",
+			stats.TotalCalibreBooks, stats.ImportedBooks, stats.FormatsAttached, stats.Skipped, len(stats.Errors))
+		return
+	}
+
+	// 8. Инициализация демона автоимпорта (Watcher)
 	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
 	if cfg.Storage.Watcher.Enabled {
 		if err := watcherInstance.Start(ctx); err != nil {
@@ -101,7 +119,14 @@ func main() {
 		}
 	}
 
-	// 8. Сборка HTTP роутера
+	// 9. Инициализация и запуск Telegram-бота (если включен)
+	var tgBot *telegram.Bot
+	if cfg.Telegram.Enabled && cfg.Telegram.BotToken != "" {
+		tgBot = telegram.NewBot(cfg, bookRepo, watcherInstance)
+		tgBot.Start(ctx)
+	}
+
+	// 10. Сборка HTTP роутера
 	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -113,7 +138,7 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// 9. Запуск сервера в отдельной горутине
+	// 11. Запуск сервера в отдельной горутине
 	go func() {
 		slog.Info("HTTP server is listening",
 			"addr", addr,
@@ -126,12 +151,16 @@ func main() {
 		}
 	}()
 
-	// 9. Перехват системных сигналов завершения (Graceful Shutdown)
+	// 12. Перехват системных сигналов завершения (Graceful Shutdown)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
 	slog.Info("Shutting down server gracefully...")
+
+	if tgBot != nil {
+		tgBot.Stop()
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

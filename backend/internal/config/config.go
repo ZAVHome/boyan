@@ -18,6 +18,13 @@ type Config struct {
 	OPDS     OPDSConfig     `yaml:"opds"`
 	Metadata MetadataConfig `yaml:"metadata"`
 	Admin    AdminConfig    `yaml:"admin"`
+	Telegram TelegramConfig `yaml:"telegram"`
+}
+
+type TelegramConfig struct {
+	Enabled        bool    `yaml:"enabled"`
+	BotToken       string  `yaml:"bot_token"`
+	AllowedUserIDs []int64 `yaml:"allowed_user_ids"`
 }
 
 type ServerConfig struct {
@@ -140,6 +147,11 @@ func DefaultConfig() *Config {
 			DefaultUsername: "admin",
 			DefaultPassword: "adminpassword",
 		},
+		Telegram: TelegramConfig{
+			Enabled:        false,
+			BotToken:       "",
+			AllowedUserIDs: []int64{},
+		},
 	}
 }
 
@@ -205,5 +217,21 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if adminPass := os.Getenv("BOYAN_ADMIN_PASSWORD"); adminPass != "" {
 		cfg.Admin.DefaultPassword = adminPass
+	}
+	if tgEnabled := os.Getenv("BOYAN_TELEGRAM_ENABLED"); tgEnabled != "" {
+		cfg.Telegram.Enabled = tgEnabled == "true" || tgEnabled == "1"
+	}
+	if tgToken := os.Getenv("BOYAN_TELEGRAM_BOT_TOKEN"); tgToken != "" {
+		cfg.Telegram.BotToken = tgToken
+	}
+	if tgUsers := os.Getenv("BOYAN_TELEGRAM_ALLOWED_USER_IDS"); tgUsers != "" {
+		parts := strings.Split(tgUsers, ",")
+		var ids []int64
+		for _, p := range parts {
+			if id, err := strconv.ParseInt(strings.TrimSpace(p), 10, 64); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		cfg.Telegram.AllowedUserIDs = ids
 	}
 }

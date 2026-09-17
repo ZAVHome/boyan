@@ -6,6 +6,7 @@ import (
 	"boyan/internal/api/handlers"
 	customMiddleware "boyan/internal/api/middleware"
 	"boyan/internal/config"
+	"boyan/internal/importer/calibre"
 	opdsv1 "boyan/internal/opds/v1"
 	opdsv2 "boyan/internal/opds/v2"
 	"boyan/internal/parsers/cover"
@@ -40,6 +41,7 @@ func NewRouter(
 
 	// Инициализация сервисов
 	streamer := services.NewStreamer(bookRepo, cfg.Storage.LibraryDir, cfg.OPDS.StreamFromZIP)
+	calibreImporter := calibre.NewImporter(cfg, bookRepo, coverCache)
 
 	// Инициализация хендлеров
 	healthH := handlers.NewHealthHandler(pool)
@@ -48,6 +50,7 @@ func NewRouter(
 	uploadH := handlers.NewUploadHandler(watcherInstance)
 	quarantineH := handlers.NewQuarantineHandler(cfg, quarantineRepo, bookRepo, coverCache)
 	progressH := handlers.NewProgressHandler(progressRepo, bookRepo)
+	calibreH := handlers.NewCalibreHandler(calibreImporter)
 
 	// Системные эндпоинты
 	r.Get("/health", healthH.HealthCheck)
@@ -89,13 +92,15 @@ func NewRouter(
 			r.Get("/shelves/{type}", progressH.GetShelfBooks)
 		})
 
-		// Карантин дубликатов (требует прав администратора)
+		// Карантин дубликатов и функции администратора (требует прав администратора)
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.RequireAdmin)
 
 			r.Get("/quarantine", quarantineH.ListQuarantine)
 			r.Get("/quarantine/{id}", quarantineH.GetQuarantineItem)
 			r.Post("/quarantine/{id}/resolve", quarantineH.ResolveQuarantine)
+
+			r.Post("/admin/import/calibre", calibreH.ImportCalibre)
 		})
 	})
 
