@@ -72,6 +72,3 @@ desktop.ini
 coverage.txt
 coverage.html
 .nyc_output/
-
-# Media
-media/

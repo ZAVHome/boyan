@@ -1,7 +1,7 @@
 package version
 
 // Version представляет текущую семантическую версию приложения.
-const Version = "0.0.2"
+const Version = "0.0.3"
 
 // Stage определяет стадию выпуска (например, "alpha", "beta", "rc", "").
 const Stage = "beta"
