@@ -14,3 +14,5 @@
 | **06** | [06_stage2_walkthrough.md](06_stage2_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 2 (OPDS v1.2, OPDS v2.0, тесты, проверка в WSL2). |
 | **07** | [07_stage3_implementation_plan.md](07_stage3_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 3: REST API Gateway, JWT Auth, демон автоимпорта (fsnotify) папки /import и карантин дубликатов. |
 | **08** | [08_stage3_walkthrough.md](08_stage3_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 3 (REST API Gateway, JWT, Watcher fsnotify, дедупликация, 5.7 МБ RAM в WSL2). |
+| **09** | [09_stage4_implementation_plan.md](09_stage4_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 4: Web Desktop Frontend (SPA на Vue 3, Vite, Tailwind CSS, TypeScript, Pinia, онлайн-читалка, модерация карантина и 4 темы). |
+| **10** | [10_stage4_walkthrough.md](10_stage4_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 4 (Web Desktop SPA, универсальная читалка FB2/EPUB, темы Light/Dark/OLED/Sepia, браузерные тесты). |
