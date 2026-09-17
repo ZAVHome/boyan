@@ -7,6 +7,7 @@ import (
 	"boyan/internal/api/handlers"
 	customMiddleware "boyan/internal/api/middleware"
 	"boyan/internal/config"
+	"boyan/internal/i18n"
 	"boyan/internal/importer/calibre"
 	opdsv1 "boyan/internal/opds/v1"
 	opdsv2 "boyan/internal/opds/v2"
@@ -39,6 +40,7 @@ func NewRouter(
 	r.Use(customMiddleware.SlogLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(customMiddleware.CORS(cfg.Server.CORSAllowedOrigins))
+	r.Use(i18n.Middleware(cfg.Server.DefaultLanguage))
 	r.Use(customMiddleware.JWTAuthMiddleware(cfg.Server.JWTSecret))
 
 	// Инициализация сервисов

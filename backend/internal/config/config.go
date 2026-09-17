@@ -31,6 +31,7 @@ type ServerConfig struct {
 	Host               string   `yaml:"host"`
 	Port               int      `yaml:"port"`
 	BaseURL            string   `yaml:"base_url"`
+	DefaultLanguage    string   `yaml:"default_language"`
 	JWTSecret          string   `yaml:"jwt_secret"`
 	JWTExpirationHours int      `yaml:"jwt_expiration_hours"`
 	CORSAllowedOrigins []string `yaml:"cors_allowed_origins"`
@@ -98,6 +99,7 @@ func DefaultConfig() *Config {
 			Host:               "0.0.0.0",
 			Port:               8080,
 			BaseURL:            "http://localhost:8080",
+			DefaultLanguage:    "ru",
 			JWTSecret:          "boyan-secret-default-change-me-in-production-32b",
 			JWTExpirationHours: 168,
 			CORSAllowedOrigins: []string{"http://localhost:3000", "http://localhost:3001"},
@@ -127,7 +129,7 @@ func DefaultConfig() *Config {
 			},
 		},
 		OPDS: OPDSConfig{
-			Title:                 "Next-Gen OPDS Suite",
+			Title:                 "Боян",
 			Subtitle:              "Каталог электронных книг",
 			PageSize:              50,
 			EnableOPDSv1:          true,
@@ -191,6 +193,12 @@ func Load(configPath string) (*Config, error) {
 func applyEnvOverrides(cfg *Config) {
 	if host := os.Getenv("BOYAN_SERVER_HOST"); host != "" {
 		cfg.Server.Host = host
+	}
+	if baseURL := os.Getenv("BOYAN_SERVER_BASE_URL"); baseURL != "" {
+		cfg.Server.BaseURL = baseURL
+	}
+	if defLang := os.Getenv("BOYAN_SERVER_DEFAULT_LANGUAGE"); defLang != "" {
+		cfg.Server.DefaultLanguage = defLang
 	}
 	if portStr := os.Getenv("BOYAN_SERVER_PORT"); portStr != "" {
 		if p, err := strconv.Atoi(portStr); err == nil {

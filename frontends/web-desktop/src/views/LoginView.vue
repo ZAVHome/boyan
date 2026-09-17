@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
-import { BookOpen, KeyRound, User as UserIcon, Loader2, AlertCircle } from 'lucide-vue-next'
+import { KeyRound, User as UserIcon, Loader2, AlertCircle } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -37,9 +37,11 @@ async function handleLogin() {
   <div class="min-h-[80vh] flex items-center justify-center p-4">
     <div class="w-full max-w-md rounded-3xl bg-bg-surface border border-border shadow-2xl p-8 space-y-6">
       <div class="text-center space-y-2">
-        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-accent to-indigo-500 flex items-center justify-center text-white mx-auto shadow-lg shadow-accent/25 mb-3">
-          <BookOpen class="w-7 h-7" />
-        </div>
+        <img
+          src="/logo.svg"
+          alt="Боян"
+          class="w-16 h-16 rounded-full mx-auto mb-3 shadow-lg shadow-amber-900/20 hover:scale-105 transition-transform"
+        />
         <h2 class="text-2xl font-bold text-fg-primary tracking-tight">
           {{ t('auth.title') }}
         </h2>

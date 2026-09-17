@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"boyan/internal/config"
+	"boyan/internal/i18n"
 	"boyan/internal/models"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/parsers/fb2"
@@ -60,7 +60,7 @@ func (h *QuarantineHandler) ListQuarantine(w http.ResponseWriter, r *http.Reques
 
 	items, total, err := h.quarantineRepo.ListQuarantine(r.Context(), offset, perPage)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list quarantine items")
+		writeAPIError(w, r, http.StatusInternalServerError, "QUARANTINE_LIST_FAILED")
 		return
 	}
 
@@ -79,17 +79,17 @@ func (h *QuarantineHandler) ListQuarantine(w http.ResponseWriter, r *http.Reques
 func (h *QuarantineHandler) GetQuarantineItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing quarantine item ID")
+		writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_ID_REQUIRED")
 		return
 	}
 
 	item, err := h.quarantineRepo.GetQuarantineItem(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Database error")
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
 		return
 	}
 	if item == nil {
-		writeJSONError(w, http.StatusNotFound, "Quarantine item not found")
+		writeAPIError(w, r, http.StatusNotFound, "QUARANTINE_NOT_FOUND")
 		return
 	}
 
@@ -112,42 +112,44 @@ type ResolveQuarantineRequest struct {
 func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing quarantine item ID")
+		writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_ID_REQUIRED")
 		return
 	}
 
 	var req ResolveQuarantineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid JSON body")
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
 	item, err := h.quarantineRepo.GetQuarantineItem(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Database error")
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
 		return
 	}
 	if item == nil {
-		writeJSONError(w, http.StatusNotFound, "Quarantine item not found")
+		writeAPIError(w, r, http.StatusNotFound, "QUARANTINE_NOT_FOUND")
 		return
 	}
+
+	tr := i18n.FromContext(r.Context())
 
 	switch req.Action {
 	case "discard":
 		_ = os.Remove(item.FilePath)
 		_ = h.quarantineRepo.DeleteQuarantineItem(r.Context(), id)
-		writeJSON(w, http.StatusOK, map[string]string{"message": "Quarantine item discarded"})
+		writeJSON(w, http.StatusOK, map[string]string{"message": tr.T("QUARANTINE_DISCARDED")})
 		return
 
 	case "replace":
 		if item.ExistingBookID == nil || *item.ExistingBookID == "" {
-			writeJSONError(w, http.StatusBadRequest, "No existing book linked to replace")
+			writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_NO_EXISTING")
 			return
 		}
 
 		existingBook, err := h.bookRepo.GetBookByID(r.Context(), *item.ExistingBookID)
 		if err != nil || existingBook == nil {
-			writeJSONError(w, http.StatusNotFound, "Existing book not found")
+			writeAPIError(w, r, http.StatusNotFound, "BOOK_NOT_FOUND")
 			return
 		}
 
@@ -156,7 +158,7 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 		destPath := filepath.Join(h.cfg.Storage.LibraryDir, relPath)
 
 		if err := copyFile(item.FilePath, destPath); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to copy file to library: %v", err))
+			writeAPIError(w, r, http.StatusInternalServerError, "QUARANTINE_COPY_FAILED", err)
 			return
 		}
 
@@ -188,18 +190,18 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 
 		_ = os.Remove(item.FilePath)
 		_ = h.quarantineRepo.DeleteQuarantineItem(r.Context(), id)
-		writeJSON(w, http.StatusOK, map[string]string{"message": "Book file replaced successfully"})
+		writeJSON(w, http.StatusOK, map[string]string{"message": tr.T("QUARANTINE_REPLACED")})
 		return
 
 	case "attach_format":
 		if item.ExistingBookID == nil || *item.ExistingBookID == "" {
-			writeJSONError(w, http.StatusBadRequest, "No existing book linked to attach format")
+			writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_NO_EXISTING")
 			return
 		}
 
 		existingBook, err := h.bookRepo.GetBookByID(r.Context(), *item.ExistingBookID)
 		if err != nil || existingBook == nil {
-			writeJSONError(w, http.StatusNotFound, "Existing book not found")
+			writeAPIError(w, r, http.StatusNotFound, "BOOK_NOT_FOUND")
 			return
 		}
 
@@ -208,7 +210,7 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 		destPath := filepath.Join(h.cfg.Storage.LibraryDir, relPath)
 
 		if err := copyFile(item.FilePath, destPath); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to copy file to library: %v", err))
+			writeAPIError(w, r, http.StatusInternalServerError, "QUARANTINE_COPY_FAILED", err)
 			return
 		}
 
@@ -222,13 +224,13 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 			CreatedAt: time.Now().UTC(),
 		}
 		if err := h.bookRepo.AddBookFile(r.Context(), newFile); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "Failed to attach file to database")
+			writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
 			return
 		}
 
 		_ = os.Remove(item.FilePath)
 		_ = h.quarantineRepo.DeleteQuarantineItem(r.Context(), id)
-		writeJSON(w, http.StatusOK, map[string]string{"message": "Format attached successfully"})
+		writeJSON(w, http.StatusOK, map[string]string{"message": tr.T("QUARANTINE_ATTACHED")})
 		return
 
 	case "keep_both":
@@ -236,7 +238,7 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 		newBookID := uuid.NewString()
 		info, innerPath, err := parseQuarantineFile(item.FilePath, item.Format)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse file: %v", err))
+			writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_PARSE_FAILED", err)
 			return
 		}
 
@@ -246,7 +248,7 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 		destPath := filepath.Join(h.cfg.Storage.LibraryDir, relPath)
 
 		if err := copyFile(item.FilePath, destPath); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to copy file to library: %v", err))
+			writeAPIError(w, r, http.StatusInternalServerError, "QUARANTINE_COPY_FAILED", err)
 			return
 		}
 
@@ -270,17 +272,17 @@ func (h *QuarantineHandler) ResolveQuarantine(w http.ResponseWriter, r *http.Req
 		}
 
 		if err := h.bookRepo.SaveBook(r.Context(), &info.Book, info.Authors, info.Series, info.Genres, bookFile); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save new book: %v", err))
+			writeAPIError(w, r, http.StatusInternalServerError, "QUARANTINE_SAVE_FAILED", err)
 			return
 		}
 
 		_ = os.Remove(item.FilePath)
 		_ = h.quarantineRepo.DeleteQuarantineItem(r.Context(), id)
-		writeJSON(w, http.StatusOK, map[string]any{"message": "Imported as new book", "book_id": newBookID})
+		writeJSON(w, http.StatusOK, map[string]any{"message": tr.T("QUARANTINE_KEPT_BOTH"), "book_id": newBookID})
 		return
 
 	default:
-		writeJSONError(w, http.StatusBadRequest, "Invalid action. Allowed: 'discard', 'replace', 'attach_format', 'keep_both'")
+		writeAPIError(w, r, http.StatusBadRequest, "QUARANTINE_INVALID_ACTION")
 		return
 	}
 }

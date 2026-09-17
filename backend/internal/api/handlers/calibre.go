@@ -38,13 +38,13 @@ type ImportCalibreRequest struct {
 func (h *CalibreHandler) ImportCalibre(w http.ResponseWriter, r *http.Request) {
 	var req ImportCalibreRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		writeJSONError(w, http.StatusBadRequest, "Path to Calibre library is required")
+		writeAPIError(w, r, http.StatusBadRequest, "CALIBRE_PATH_REQUIRED")
 		return
 	}
 

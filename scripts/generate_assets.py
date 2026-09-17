@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Скрипт генерации веб-ассетов (иконки, логотипы, баннеры) для проекта Next-Gen OPDS Suite («Боян»).
+Скрипт генерации веб-ассетов (иконки, логотипы, баннеры) для проекта «Боян» (Boyan).
 Берет исходники из папки media/ и генерирует набор оптимизированных файлов для фронтендов и документации.
 """
 
 import os
+import shutil
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageOps
 
@@ -130,6 +131,16 @@ def generate_all():
     # Сохранение оптимизированного баннера также в media/
     banner_resized.save(MEDIA_DIR / "Boyan_banner_1920.jpg", "JPEG", quality=85, optimize=True, progressive=True)
     print("  -> media/Boyan_banner_1920.jpg сохранен")
+
+    svg_logo = MEDIA_DIR / "Boyan_logo_transparent.svg"
+    if svg_logo.exists():
+        print("\n3. Распространение векторного логотипа (Boyan_logo_transparent.svg)...")
+        for pub_dir, name in [(DESKTOP_PUB, "web-desktop"), (MOBILE_PUB, "web-mobile")]:
+            shutil.copyfile(svg_logo, pub_dir / "logo.svg")
+            shutil.copyfile(svg_logo, pub_dir / "favicon.svg")
+            print(f"  -> logo.svg и favicon.svg скопированы в {name}/public")
+        shutil.copyfile(svg_logo, DOCS_ASSETS / "logo.svg")
+        print("  -> logo.svg скопирован в docs/assets")
 
     print("\nГенерация всех веб-ассетов успешно завершена!")
 

@@ -108,8 +108,9 @@
       </div>
 
       <!-- App Info -->
-      <div class="text-center py-4 text-xs text-theme-muted space-y-1">
-        <p class="font-semibold text-theme-text">Боян • Next-Gen OPDS Suite (Mobile PWA)</p>
+      <div class="text-center py-4 text-xs text-theme-muted space-y-1 flex flex-col items-center">
+        <img src="/logo.svg" alt="Боян" class="w-12 h-12 rounded-full mb-1 shadow-sm" />
+        <p class="font-semibold text-theme-text">Боян (Mobile PWA)</p>
         <p class="font-mono text-[10px]">Версия 1.0.0 (Stage 5)</p>
       </div>
     </main>

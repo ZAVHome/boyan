@@ -65,4 +65,4 @@ Write-Host "To deploy to your VPS:" -ForegroundColor Yellow
 Write-Host "  scp dist/boyan-linux-amd64.tar.gz root@your-vps:/tmp/" -ForegroundColor Yellow
 Write-Host "  ssh root@your-vps" -ForegroundColor Yellow
 Write-Host "  mkdir -p /tmp/boyan-pkg && tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-pkg" -ForegroundColor Yellow
-Write-Host "  cd /tmp/boyan-pkg && sudo bash install.sh" -ForegroundColor Yellow
+Write-Host "  cd /tmp/boyan-pkg && sudo bash install.sh books.MYDOMAIN.COM" -ForegroundColor Yellow

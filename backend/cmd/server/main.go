@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("Next-Gen OPDS Suite (Boyan) v%s\n", version.Full())
+		fmt.Printf("Boyan v%s\n", version.Full())
 		return
 	}
 
@@ -48,7 +48,7 @@ func main() {
 	// 2. Инициализация структурированного логирования slog
 	setupLogger(cfg.Logging)
 
-	slog.Info("Starting Next-Gen OPDS Suite (Boyan)",
+	slog.Info("Starting Boyan server",
 		"version", version.Full(),
 		"config", configPath,
 		"log_level", cfg.Logging.Level,

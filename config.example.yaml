@@ -1,5 +1,5 @@
 # ====================================================================
-# Next-Gen OPDS Suite — Example Configuration File
+# Boyan — Example Configuration File
 # Copy to config.yaml and customize for your environment
 # ====================================================================
 
@@ -7,6 +7,7 @@ server:
   host: "0.0.0.0"
   port: 8080
   base_url: "https://books.example.com" # Used for OPDS feed links and webhook callbacks
+  default_language: "ru" # Default interface/feed language: "ru" or "en"
   jwt_secret: "replace-this-with-a-random-32-character-secret-key"
   jwt_expiration_hours: 168 # 7 days
   cors_allowed_origins:

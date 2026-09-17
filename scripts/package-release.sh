@@ -53,4 +53,4 @@ echo "Для установки на VPS скопируйте архив и за
 echo "  scp ${ARCHIVE_FILE} root@your-vps:/tmp/"
 echo "  ssh root@your-vps"
 echo "  mkdir /tmp/boyan-pkg && tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-pkg"
-echo "  cd /tmp/boyan-pkg && sudo bash install.sh"
+echo "  cd /tmp/boyan-pkg && sudo bash install.sh books.MYDOMAIN.COM"

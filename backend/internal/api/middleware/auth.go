@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
+	"boyan/internal/i18n"
 	"boyan/internal/storage"
 )
 
@@ -35,8 +37,9 @@ func OPDSAuth(userRepo *storage.UserRepository, allowAnonymous bool, staticToken
 			}
 
 			// Требуем аутентификацию
-			w.Header().Set("WWW-Authenticate", `Basic realm="Next-Gen OPDS Suite (Boyan)"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			tr := i18n.FromContext(r.Context())
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, tr.T("opds.auth_realm")))
+			http.Error(w, tr.T("AUTH_REQUIRED"), http.StatusUnauthorized)
 		})
 	}
 }

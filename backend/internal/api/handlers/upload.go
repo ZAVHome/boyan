@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"boyan/internal/i18n"
 	"boyan/internal/watcher"
 )
 
@@ -22,13 +22,13 @@ func NewUploadHandler(w *watcher.Watcher) *UploadHandler {
 func (h *UploadHandler) UploadBook(w http.ResponseWriter, r *http.Request) {
 	// Ограничиваем размер загружаемого файла (например, 100 МБ)
 	if err := r.ParseMultipartForm(100 * 1024 * 1024); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse multipart form: %v", err))
+		writeAPIError(w, r, http.StatusBadRequest, "UPLOAD_PARSE_FAILED", err)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Missing 'file' in form-data")
+		writeAPIError(w, r, http.StatusBadRequest, "UPLOAD_MISSING_FILE")
 		return
 	}
 	defer file.Close()
@@ -39,7 +39,7 @@ func (h *UploadHandler) UploadBook(w http.ResponseWriter, r *http.Request) {
 
 	tempFile, err := os.CreateTemp(tempDir, "upload-*"+filepath.Ext(header.Filename))
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to create temp file")
+		writeAPIError(w, r, http.StatusInternalServerError, "UPLOAD_TEMP_FAILED")
 		return
 	}
 	tempPath := tempFile.Name()
@@ -49,7 +49,7 @@ func (h *UploadHandler) UploadBook(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := io.Copy(tempFile, file); err != nil {
 		tempFile.Close()
-		writeJSONError(w, http.StatusInternalServerError, "Failed to save uploaded file")
+		writeAPIError(w, r, http.StatusInternalServerError, "UPLOAD_SAVE_FAILED")
 		return
 	}
 	tempFile.Close()
@@ -57,8 +57,25 @@ func (h *UploadHandler) UploadBook(w http.ResponseWriter, r *http.Request) {
 	// Запускаем пайплайн обработки через Watcher
 	res, err := h.watcher.ProcessFile(r.Context(), tempPath, header.Filename)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Failed to process book: %v", err))
+		writeAPIError(w, r, http.StatusBadRequest, "UPLOAD_FAILED", err)
 		return
+	}
+
+	// Локализуем статусное сообщение для клиента
+	tr := i18n.FromContext(r.Context())
+	switch res.Status {
+	case "imported":
+		res.Message = tr.T("WATCHER_IMPORTED")
+	case "quarantined":
+		if res.ConflictType == "exact_hash" {
+			res.Message = tr.T("WATCHER_EXACT_DUPLICATE")
+		} else {
+			res.Message = tr.T("WATCHER_SAME_FORMAT")
+		}
+	case "skipped":
+		res.Message = tr.T("WATCHER_EXACT_SKIPPED")
+	case "format_attached":
+		res.Message = tr.T("WATCHER_FORMAT_ATTACHED", filepath.Ext(header.Filename), res.BookID)
 	}
 
 	statusCode := http.StatusOK

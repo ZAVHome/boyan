@@ -94,3 +94,70 @@ func TestOPDSv2_CatalogAndSearch(t *testing.T) {
 		t.Errorf("expected 1 search result, got %d", len(searchFeed.Publications))
 	}
 }
+
+func TestOPDSv2_I18nLocalization(t *testing.T) {
+	ctx := context.Background()
+	tmpDir, err := os.MkdirTemp("", "opds2_i18n_test_*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	coverDir := filepath.Join(tmpDir, "covers")
+
+	pool, err := storage.NewSQLitePool(ctx, dbPath, 5000, 16000)
+	if err != nil {
+		t.Fatalf("NewSQLitePool: %v", err)
+	}
+	defer pool.Close()
+
+	_ = storage.RunMigrations(ctx, pool.Writer)
+
+	bookRepo := storage.NewBookRepository(pool)
+	userRepo := storage.NewUserRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
+	coverCache, _ := cover.NewCoverCache(coverDir, 10)
+
+	cfg := config.DefaultConfig()
+	cfg.OPDS.AllowAnonymousReading = true
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
+
+	// 1. По умолчанию русский язык в навигации
+	recRU := httptest.NewRecorder()
+	reqRU := httptest.NewRequest(http.MethodGet, "/opds/v2/catalog.json", nil)
+	router.ServeHTTP(recRU, reqRU)
+
+	var feedRU opdsv2.Feed
+	_ = json.Unmarshal(recRU.Body.Bytes(), &feedRU)
+	foundAuthorsRU := false
+	for _, nav := range feedRU.Navigation {
+		if nav.Title == "По авторам" {
+			foundAuthorsRU = true
+			break
+		}
+	}
+	if !foundAuthorsRU {
+		t.Errorf("expected RU 'По авторам' in default feed navigation")
+	}
+
+	// 2. Английский язык через ?lang=en
+	recEN := httptest.NewRecorder()
+	reqEN := httptest.NewRequest(http.MethodGet, "/opds/v2/catalog.json?lang=en", nil)
+	router.ServeHTTP(recEN, reqEN)
+
+	var feedEN opdsv2.Feed
+	_ = json.Unmarshal(recEN.Body.Bytes(), &feedEN)
+	foundAuthorsEN := false
+	for _, nav := range feedEN.Navigation {
+		if nav.Title == "By Authors" {
+			foundAuthorsEN = true
+			break
+		}
+	}
+	if !foundAuthorsEN {
+		t.Errorf("expected EN 'By Authors' with ?lang=en in navigation")
+	}
+}

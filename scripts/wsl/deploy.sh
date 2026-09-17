@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-echo "===> Deploying Boyan (Next-Gen OPDS Suite) to WSL2 systemd..."
+echo "===> Deploying Boyan to WSL2 systemd..."
 
 # Проверяем наличие скомпилированного бинарника под Linux
 BINARY_SRC="${PROJECT_ROOT}/bin/boyan-linux"

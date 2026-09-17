@@ -7,6 +7,7 @@ import (
 
 	"boyan/internal/auth"
 	"boyan/internal/config"
+	"boyan/internal/i18n"
 	"boyan/internal/models"
 	"boyan/internal/storage"
 )
@@ -44,34 +45,34 @@ type LoginResponse struct {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid JSON payload")
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
 	if req.Username == "" || req.Password == "" {
-		writeJSONError(w, http.StatusBadRequest, "Username and password are required")
+		writeAPIError(w, r, http.StatusBadRequest, "AUTH_FIELDS_REQUIRED")
 		return
 	}
 
 	user, err := h.userRepo.GetByUsername(r.Context(), req.Username)
 	if err != nil || user == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Invalid username or password")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_INVALID_CREDENTIALS")
 		return
 	}
 
 	if !user.IsActive {
-		writeJSONError(w, http.StatusForbidden, "User account is inactive")
+		writeAPIError(w, r, http.StatusForbidden, "AUTH_USER_INACTIVE")
 		return
 	}
 
 	if !h.userRepo.VerifyPassword(user, req.Password) {
-		writeJSONError(w, http.StatusUnauthorized, "Invalid username or password")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_INVALID_CREDENTIALS")
 		return
 	}
 
 	token, expiresAt, err := auth.GenerateToken(user, h.cfg.Server.JWTSecret, h.cfg.Server.JWTExpirationHours)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to generate token")
+		writeAPIError(w, r, http.StatusInternalServerError, "AUTH_TOKEN_GEN_FAILED")
 		return
 	}
 
@@ -106,7 +107,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
@@ -137,7 +138,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	tr := i18n.FromContext(r.Context())
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": tr.T("AUTH_LOGGED_OUT")})
 }

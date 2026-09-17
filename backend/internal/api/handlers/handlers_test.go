@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"boyan/internal/api"
@@ -114,5 +115,95 @@ func TestAPIHandlers(t *testing.T) {
 
 	if rec404.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for missing book, got %d", rec404.Code)
+	}
+}
+
+func TestAPI_I18nErrorResponses(t *testing.T) {
+	ctx := context.Background()
+	tmpDir, err := os.MkdirTemp("", "api_i18n_test_*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	coverDir := filepath.Join(tmpDir, "covers")
+
+	pool, err := storage.NewSQLitePool(ctx, dbPath, 5000, 16000)
+	if err != nil {
+		t.Fatalf("NewSQLitePool failed: %v", err)
+	}
+	defer pool.Close()
+
+	_ = storage.RunMigrations(ctx, pool.Writer)
+
+	bookRepo := storage.NewBookRepository(pool)
+	userRepo := storage.NewUserRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
+	coverCache, _ := cover.NewCoverCache(coverDir, 10)
+
+	cfg := config.DefaultConfig()
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
+
+	// 1. Ошибка 404 на английском языке
+	req404EN := httptest.NewRequest(http.MethodGet, "/api/v1/books/not-found-id", nil)
+	req404EN.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	rec404EN := httptest.NewRecorder()
+	router.ServeHTTP(rec404EN, req404EN)
+
+	if rec404EN.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec404EN.Code)
+	}
+	var errRespEN struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	_ = json.Unmarshal(rec404EN.Body.Bytes(), &errRespEN)
+	if errRespEN.Code != "BOOK_NOT_FOUND" || errRespEN.Error != "Book not found" {
+		t.Errorf("expected EN BOOK_NOT_FOUND, got: %+v", errRespEN)
+	}
+
+	// 2. Ошибка 404 на русском языке
+	req404RU := httptest.NewRequest(http.MethodGet, "/api/v1/books/not-found-id", nil)
+	req404RU.Header.Set("Accept-Language", "ru-RU,ru;q=0.9")
+	rec404RU := httptest.NewRecorder()
+	router.ServeHTTP(rec404RU, req404RU)
+
+	var errRespRU struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	_ = json.Unmarshal(rec404RU.Body.Bytes(), &errRespRU)
+	if errRespRU.Code != "BOOK_NOT_FOUND" || errRespRU.Error != "Книга не найдена" {
+		t.Errorf("expected RU BOOK_NOT_FOUND, got: %+v", errRespRU)
+	}
+
+	// 3. Ошибка авторизации (пустые логин/пароль) на английском языке
+	reqLoginEN := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"","password":""}`))
+	reqLoginEN.Header.Set("Accept-Language", "en")
+	reqLoginEN.Header.Set("Content-Type", "application/json")
+	recLoginEN := httptest.NewRecorder()
+	router.ServeHTTP(recLoginEN, reqLoginEN)
+
+	if recLoginEN.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty login, got %d", recLoginEN.Code)
+	}
+	_ = json.Unmarshal(recLoginEN.Body.Bytes(), &errRespEN)
+	if errRespEN.Code != "AUTH_FIELDS_REQUIRED" || errRespEN.Error != "Username and password are required" {
+		t.Errorf("expected EN AUTH_FIELDS_REQUIRED, got: %+v", errRespEN)
+	}
+
+	// 4. Ошибка авторизации на русском языке
+	reqLoginRU := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"","password":""}`))
+	reqLoginRU.Header.Set("Accept-Language", "ru")
+	reqLoginRU.Header.Set("Content-Type", "application/json")
+	recLoginRU := httptest.NewRecorder()
+	router.ServeHTTP(recLoginRU, reqLoginRU)
+
+	_ = json.Unmarshal(recLoginRU.Body.Bytes(), &errRespRU)
+	if errRespRU.Code != "AUTH_FIELDS_REQUIRED" || errRespRU.Error != "Имя пользователя и пароль обязательны для заполнения" {
+		t.Errorf("expected RU AUTH_FIELDS_REQUIRED, got: %+v", errRespRU)
 	}
 }

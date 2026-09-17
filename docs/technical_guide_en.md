@@ -1,4 +1,6 @@
-# Technical Guide: Next-Gen OPDS Suite ("Boyan")
+# Technical Guide: Boyan
+
+<img src="assets/logo.svg" align="right" width="90" alt="Boyan" />
 
 Technical and architectural documentation for system administrators, DevOps engineers, and backend/frontend developers working with **Boyan**.
 
@@ -162,12 +164,37 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
 - **MIME Type:** `application/opds+json`
 - Implements the modern OPDS 2.0 schema, including `metadata`, `links`, `navigation`, and a `publications` collection.
 
+### Multilingual Feeds & Catalog Localization (Backend i18n)
+
+Boyan supports dynamic, on-the-fly OPDS feed localization (see [ADR-15](decisions/15_backend_i18n_architecture.md)):
+
+- **E-Ink Readers (PocketBook, KOReader, Moon+ Reader):** Readers can configure feed language directly in the catalog URL:
+  - `GET /opds/v1/feed.xml?lang=en` — all sections (*By Authors*, *By Series*, *Recent Additions*, *Search Results*) and the OpenSearch descriptor are served in English.
+  - `GET /opds/v1/feed.xml?lang=ru` — all sections are served in Russian.
+- **Header-based Detection:** Clients sending `Accept-Language: en-US,en;q=0.9` automatically receive English feeds.
+- **Default Language:** Configured in `config.yaml` via `server.default_language: "ru"`.
+
 ---
 
 ## 6. REST API Reference & OpenAPI/Swagger Docs
 
 All REST endpoints are prefixed with `/api/v1/`. Interactive documentation and test forms are available at:
 👉 `http://localhost:8080/api/v1/docs/index.html`
+
+### Multilingual Error Formatting (Backend i18n)
+
+REST API error responses use a standardized hybrid payload:
+
+```json
+{
+  "error": "Invalid username or password",
+  "code": "AUTH_INVALID_CREDENTIALS"
+}
+```
+
+- The `error` field contains human-readable text in the client's language (resolved via `?lang=` or `Accept-Language`).
+- The `code` field contains a stable machine-readable identifier in `SCREAMING_SNAKE_CASE`.
+- External and lightweight clients can display `error` directly, while SPA/PWA clients can map `code` to `vue-i18n` strings when desired.
 
 ### Route Groups
 
@@ -291,7 +318,7 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
 
    ```ini
    [Unit]
-   Description=Next-Gen OPDS Suite (Boyan) Server
+   Description=Boyan Server
    After=network.target
 
    [Service]

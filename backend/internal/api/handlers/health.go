@@ -28,7 +28,7 @@ func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"status":    "ok",
 		"db":        dbStatus,
 		"timestamp": time.Now().UTC(),
-		"service":   "Next-Gen OPDS Suite (Boyan)",
+		"service":   "Boyan",
 		"version":   version.Full(),
 	}
 

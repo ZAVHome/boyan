@@ -1,4 +1,6 @@
-# User Guide: Next-Gen OPDS Suite ("Boyan")
+# User Guide: Boyan
+
+<img src="assets/logo.svg" align="right" width="90" alt="Boyan" />
 
 Welcome to the comprehensive user guide for **Boyan** — an ultra-lightweight, modular eBook catalog, in-browser reading suite, and OPDS distribution server.
 

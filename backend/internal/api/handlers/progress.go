@@ -32,19 +32,19 @@ type SaveProgressRequest struct {
 func (h *ProgressHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
 	bookID := chi.URLParam(r, "id")
 	if bookID == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing book ID")
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_ID_REQUIRED")
 		return
 	}
 
 	p, err := h.progressRepo.GetProgress(r.Context(), claims.UserID, bookID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Database error")
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
 		return
 	}
 
@@ -66,19 +66,19 @@ func (h *ProgressHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
 func (h *ProgressHandler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
 	bookID := chi.URLParam(r, "id")
 	if bookID == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing book ID")
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_ID_REQUIRED")
 		return
 	}
 
 	var req SaveProgressRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid JSON body")
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *ProgressHandler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.progressRepo.SaveProgress(r.Context(), record); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to save reading progress")
+		writeAPIError(w, r, http.StatusInternalServerError, "PROGRESS_SAVE_FAILED")
 		return
 	}
 
@@ -121,29 +121,29 @@ type AddToShelfRequest struct {
 func (h *ProgressHandler) AddToShelf(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
 	bookID := chi.URLParam(r, "id")
 	if bookID == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing book ID")
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_ID_REQUIRED")
 		return
 	}
 
 	var req AddToShelfRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid JSON body")
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
 	if req.ShelfType != "reading" && req.ShelfType != "finished" && req.ShelfType != "favorite" {
-		writeJSONError(w, http.StatusBadRequest, "Invalid shelf type. Must be: 'reading', 'finished', or 'favorite'")
+		writeAPIError(w, r, http.StatusBadRequest, "SHELF_INVALID_TYPE")
 		return
 	}
 
 	if err := h.progressRepo.AddToShelf(r.Context(), claims.UserID, bookID, req.ShelfType); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to add book to shelf")
+		writeAPIError(w, r, http.StatusInternalServerError, "SHELF_ADD_FAILED")
 		return
 	}
 
@@ -154,19 +154,19 @@ func (h *ProgressHandler) AddToShelf(w http.ResponseWriter, r *http.Request) {
 func (h *ProgressHandler) RemoveFromShelf(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
 	bookID := chi.URLParam(r, "id")
 	shelfType := chi.URLParam(r, "type")
 	if bookID == "" || shelfType == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing book ID or shelf type")
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_OR_SHELF_REQUIRED")
 		return
 	}
 
 	if err := h.progressRepo.RemoveFromShelf(r.Context(), claims.UserID, bookID, shelfType); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to remove book from shelf")
+		writeAPIError(w, r, http.StatusInternalServerError, "SHELF_REMOVE_FAILED")
 		return
 	}
 
@@ -177,19 +177,19 @@ func (h *ProgressHandler) RemoveFromShelf(w http.ResponseWriter, r *http.Request
 func (h *ProgressHandler) GetShelfBooks(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.UserFromContext(r.Context())
 	if !ok || claims == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 		return
 	}
 
 	shelfType := chi.URLParam(r, "type")
 	if shelfType == "" {
-		writeJSONError(w, http.StatusBadRequest, "Missing shelf type")
+		writeAPIError(w, r, http.StatusBadRequest, "SHELF_REQUIRED")
 		return
 	}
 
 	books, err := h.progressRepo.GetUserShelfBooks(r.Context(), claims.UserID, shelfType)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to get shelf books")
+		writeAPIError(w, r, http.StatusInternalServerError, "SHELF_GET_FAILED")
 		return
 	}
 

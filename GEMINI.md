@@ -1,7 +1,7 @@
-# Project Guidelines: Next-Gen OPDS Suite
+# Project Guidelines: Боян (Boyan)
 
 ## Project Overview
-Next-Gen OPDS Suite — это модульный программный комплекс с открытым исходным кодом для каталогизации, управления, веб-чтения и сетевой дистрибуции электронных книг (FB2, FB2.ZIP, EPUB, MOBI, PDF, DJVU) по протоколам OPDS v1.2 (XML/Atom) и OPDS v2.0 (JSON-LD).
+Боян (Boyan) — это модульный программный комплекс с открытым исходным кодом (Next-Gen OPDS Suite) для каталогизации, управления, веб-чтения и сетевой дистрибуции электронных книг (FB2, FB2.ZIP, EPUB, MOBI, PDF, DJVU) по протоколам OPDS v1.2 (XML/Atom) и OPDS v2.0 (JSON-LD).
 
 ## Architectural Principles (Strict Headless Architecture)
 1. **Строгое разделение Backend и Frontend:**

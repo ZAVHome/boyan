@@ -1,6 +1,6 @@
-# Linux VPS Installation Guide for Next-Gen OPDS Suite ("Boyan")
+# Linux VPS Installation Guide for Boyan
 
-This guide provides a comprehensive walkthrough for deploying **Next-Gen OPDS Suite ("Boyan")** on Linux Virtual Private Servers (VPS / VDS), specifically tailored for **Ubuntu 22.04 / 24.04 LTS**, **Debian 11 / 12**, and **Rocky Linux 9**.
+This guide provides a comprehensive walkthrough for deploying **Boyan** on Linux Virtual Private Servers (VPS / VDS), specifically tailored for **Ubuntu 22.04 / 24.04 LTS**, **Debian 11 / 12**, and **Rocky Linux 9**.
 
 ---
 
@@ -24,7 +24,30 @@ Boyan is engineered from the ground up for **external builds**:
 | **RAM** | 512 MB RAM | 1 GB RAM |
 | **Disk Space** | 2 GB + book library | 10 GB + book library (SSD/NVMe) |
 | **Operating System** | Ubuntu 22.04+, Debian 11+ | Ubuntu 24.04 LTS |
-| **Network** | Public IPv4 / IPv6 | Domain name (for HTTPS) |
+| **Network** | Public IPv4 / IPv6 | Dedicated subdomain (for HTTPS) |
+
+---
+
+## 🌐 DNS Preparation: Dedicated Subdomain (`books.MYDOMAIN.COM`)
+
+For seamless desktop/mobile browser access, PWA offline capabilities (Service Workers strictly require HTTPS), and secure OPDS catalog sync with e-readers, Boyan is designed to run on a **dedicated subdomain** (e.g. `books.MYDOMAIN.COM`):
+
+1. **Create an `A` Record in your DNS provider control panel:**
+   - **Type:** `A`
+   - **Host / Name:** `books` (or `books.MYDOMAIN.COM`)
+   - **Value (Target):** Public IPv4 address of your VPS
+   - **TTL:** `300` seconds (5 min) or provider default
+
+2. **(Optional) `AAAA` Record for IPv6:**
+   - Add an `AAAA` record if your VPS has a public IPv6 address.
+
+3. **Verify DNS Propagation:**
+
+   ```bash
+   dig +short books.MYDOMAIN.COM
+   # or
+   nslookup books.MYDOMAIN.COM
+   ```
 
 ---
 
@@ -63,7 +86,7 @@ scp dist/boyan-linux-amd64.tar.gz root@YOUR_SERVER_IP:/tmp/
 
 ### Step 3. Execute Installation on VPS
 
-Connect via SSH and run the installer:
+Connect via SSH and run the installer with your dedicated subdomain:
 
 ```bash
 ssh root@YOUR_SERVER_IP
@@ -73,8 +96,8 @@ mkdir -p /tmp/boyan-pkg
 tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-pkg
 cd /tmp/boyan-pkg
 
-# Run automated installer
-sudo bash install.sh
+# Run automated installer with your subdomain
+sudo bash install.sh books.MYDOMAIN.COM
 ```
 
 **What `install.sh` handles automatically:**
@@ -89,7 +112,8 @@ sudo bash install.sh
    - `/var/www/boyan/web-desktop` — Desktop web app static files.
    - `/var/www/boyan/web-mobile` — Mobile PWA reader static files.
 3. Registers and starts the `systemd` service (`boyan.service`).
-4. Installs the production Nginx virtual host configuration (`/etc/nginx/sites-available/boyan`).
+4. Configures the Nginx reverse proxy virtual host (`/etc/nginx/sites-available/boyan`) tailored for `books.MYDOMAIN.COM`.
+5. Prompts to automatically obtain a free **Let's Encrypt SSL certificate** and enable HTTPS redirection.
 
 ---
 
@@ -172,7 +196,7 @@ Create `/etc/systemd/system/boyan.service`:
 
 ```ini
 [Unit]
-Description=Next-Gen OPDS Suite (Boyan) Server
+Description=Boyan Server
 After=network.target
 
 [Service]
@@ -213,7 +237,7 @@ sudo systemctl status boyan
 
 ### 7. Configure Nginx Reverse Proxy
 
-Create `/etc/nginx/sites-available/boyan`:
+Create the virtual host configuration `/etc/nginx/sites-available/boyan` for your subdomain (e.g. `books.MYDOMAIN.COM`):
 
 ```nginx
 upstream boyan_backend {
@@ -225,9 +249,15 @@ server {
     listen 80;
     listen [::]:80;
     
-    server_name books.example.com; # Your domain
+    # Dedicated subdomain for Boyan
+    server_name books.MYDOMAIN.COM;
 
     client_max_body_size 200M;
+
+    # Let's Encrypt ACME challenge validation
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     # Gzip compression
     gzip on;
@@ -296,13 +326,26 @@ sudo systemctl reload nginx
 
 ### 8. Enable Let's Encrypt HTTPS (SSL)
 
-HTTPS is mandatory for Service Workers and offline PWA functionality.
+HTTPS is strictly mandatory for Service Workers, IndexedDB offline book storage in PWA, and secure remote OPDS feed syncing.
+
+Request a certificate and automatically configure Nginx:
 
 ```bash
-sudo certbot --nginx -d books.example.com
+sudo certbot --nginx -d books.MYDOMAIN.COM
 ```
 
-Certbot will configure automatic HTTP-to-HTTPS redirection and schedule renewal timers.
+**What Certbot does:**
+
+1. Validates domain control for `books.MYDOMAIN.COM` with Let's Encrypt via HTTP-01 ACME challenge.
+2. Generates trusted TLS certificates at `/etc/letsencrypt/live/books.MYDOMAIN.COM/`.
+3. Modifies `/etc/nginx/sites-available/boyan` to configure port 443 SSL directives and creates an automatic 301 HTTP-to-HTTPS redirect.
+4. Registers `certbot.timer` systemd timer for automatic renewals every 60 days.
+
+Verify auto-renewal:
+
+```bash
+sudo certbot renew --dry-run
+```
 
 ---
 

@@ -13,55 +13,49 @@ import (
 )
 
 // handleStart отправляет приветственное сообщение и инструкцию.
-func (b *Bot) handleStart(chatID int64) error {
-	msg := `👋 <b>Добро пожаловать в Боян — Next-Gen OPDS Suite!</b>
-
-Я помогу вам искать, скачивать и пополнять вашу домашнюю библиотеку.
-
-🔍 <b>Поиск книг:</b>
-Просто напишите название книги, автора или серию прямо в этот чат (или используйте команду <code>/search Название</code>).
-
-📥 <b>Загрузка книг:</b>
-Отправьте мне файл книги (поддерживаются <b>FB2, FB2.ZIP, EPUB, MOBI, PDF, DJVU</b>), и я автоматически добавлю её в библиотеку и проверю на дубликаты.`
-
-	return b.client.SendMessage(chatID, msg, nil)
+func (b *Bot) handleStart(chatID int64, lang Lang) error {
+	msgs := GetMessages(lang)
+	return b.client.SendMessage(chatID, msgs.StartHelp, nil)
 }
 
 // handleSearch выполняет полнотекстовый поиск по книгам библиотеки.
-func (b *Bot) handleSearch(ctx context.Context, chatID int64, query string) error {
+func (b *Bot) handleSearch(ctx context.Context, chatID int64, query string, lang Lang) error {
 	query = strings.TrimSpace(query)
+	msgs := GetMessages(lang)
+
 	if query == "" {
-		return b.client.SendMessage(chatID, "Пожалуйста, укажите поисковый запрос (например: <code>/search Булгаков</code>).", nil)
+		return b.client.SendMessage(chatID, msgs.SearchEmptyQuery, nil)
 	}
 
 	books, total, err := b.bookRepo.SearchBooksFTS(ctx, query, 0, 5)
 	if err != nil {
 		slog.Error("Telegram bot search failed", "query", query, "err", err)
-		return b.client.SendMessage(chatID, "❌ Произошла ошибка при выполнении поиска.", nil)
+		return b.client.SendMessage(chatID, msgs.SearchError, nil)
 	}
 
 	if total == 0 || len(books) == 0 {
-		return b.client.SendMessage(chatID, fmt.Sprintf("🔍 По запросу «<i>%s</i>» ничего не найдено.", html.EscapeString(query)), nil)
+		return b.client.SendMessage(chatID, msgs.SearchNotFound(html.EscapeString(query)), nil)
 	}
 
-	intro := fmt.Sprintf("📚 Найдено книг: <b>%d</b> (показаны первые %d):", total, len(books))
+	intro := msgs.SearchFoundIntro(total, len(books))
 	_ = b.client.SendMessage(chatID, intro, nil)
 
 	for _, book := range books {
-		b.sendBookCard(chatID, book)
+		b.sendBookCard(chatID, book, lang)
 	}
 
 	return nil
 }
 
-func (b *Bot) sendBookCard(chatID int64, book models.Book) {
+func (b *Bot) sendBookCard(chatID int64, book models.Book, lang Lang) {
+	msgs := GetMessages(lang)
 	authorNames := make([]string, 0, len(book.Authors))
 	for _, a := range book.Authors {
 		authorNames = append(authorNames, a.Name)
 	}
 	authorsStr := strings.Join(authorNames, ", ")
 	if authorsStr == "" {
-		authorsStr = "Неизвестный автор"
+		authorsStr = msgs.UnknownAuthor
 	}
 
 	var text strings.Builder
@@ -70,11 +64,7 @@ func (b *Bot) sendBookCard(chatID int64, book models.Book) {
 
 	if len(book.Series) > 0 {
 		s := book.Series[0]
-		if s.Index > 0 {
-			text.WriteString(fmt.Sprintf("📚 Серия: %s #%.0f\n", html.EscapeString(s.Name), s.Index))
-		} else {
-			text.WriteString(fmt.Sprintf("📚 Серия: %s\n", html.EscapeString(s.Name)))
-		}
+		text.WriteString(msgs.SeriesPrefix(html.EscapeString(s.Name), s.Index))
 	}
 
 	if book.Annotation != "" {
@@ -114,7 +104,7 @@ func (b *Bot) sendBookCard(chatID int64, book models.Book) {
 }
 
 // handleCallbackQuery обрабатывает нажатие кнопки скачивания книги.
-func (b *Bot) handleCallbackQuery(ctx context.Context, cq *CallbackQuery) error {
+func (b *Bot) handleCallbackQuery(ctx context.Context, cq *CallbackQuery, lang Lang) error {
 	data := cq.Data
 	if !strings.HasPrefix(data, "dl:") {
 		return nil
@@ -127,12 +117,13 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cq *CallbackQuery) error 
 
 	bookID := parts[1]
 	format := parts[2]
+	msgs := GetMessages(lang)
 
-	_ = b.client.AnswerCallbackQuery(cq.ID, "Подготовка книги к отправке...")
+	_ = b.client.AnswerCallbackQuery(cq.ID, msgs.PreparingDownload)
 
 	fileRecord, err := b.bookRepo.GetBookFileByFormat(ctx, bookID, format)
 	if err != nil || fileRecord == nil {
-		return b.client.SendMessage(cq.Message.Chat.ID, "❌ Файл книги не найден на сервере.", nil)
+		return b.client.SendMessage(cq.Message.Chat.ID, msgs.FileNotFound, nil)
 	}
 
 	fullPath := fileRecord.FilePath
@@ -143,11 +134,15 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cq *CallbackQuery) error 
 	file, err := os.Open(fullPath)
 	if err != nil {
 		slog.Error("Failed to open book file for telegram", "path", fullPath, "err", err)
-		return b.client.SendMessage(cq.Message.Chat.ID, "❌ Не удалось прочитать файл книги на сервере.", nil)
+		return b.client.SendMessage(cq.Message.Chat.ID, msgs.FileReadError, nil)
 	}
 	defer file.Close()
 
-	caption := fmt.Sprintf("Приятного чтения от <b>Бояна</b>! 📚")
+	var bookTitle string
+	if book, err := b.bookRepo.GetBookByID(ctx, bookID); err == nil && book != nil {
+		bookTitle = html.EscapeString(book.Title)
+	}
+	caption := msgs.HappyReading(bookTitle)
 	fileName := filepath.Base(fullPath)
 
 	return b.client.SendDocument(cq.Message.Chat.ID, fileName, file, caption)

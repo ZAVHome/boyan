@@ -1,4 +1,4 @@
-# Руководство по установке Next-Gen OPDS Suite («Боян») на Linux VPS
+# Руководство по установке «Боян» на Linux VPS
 
 Это руководство подробно описывает процесс развертывания программного комплекса **«Боян»** на виртуальных выделенных серверах (VPS / VDS) под управлением Linux (**Ubuntu 22.04 / 24.04 LTS**, **Debian 11 / 12**, **Rocky Linux 9**).
 
@@ -24,7 +24,30 @@
 | **Оперативная память** | 512 МБ RAM | 1 ГБ RAM |
 | **Дисковое пространство** | 2 ГБ + размер книг | 10 ГБ + размер книг (SSD/NVMe) |
 | **Операционная система** | Ubuntu 22.04+, Debian 11+ | Ubuntu 24.04 LTS |
-| **Сеть** | Публичный IPv4 / IPv6 адрес | Доменное имя (для HTTPS) |
+| **Сеть** | Публичный IPv4 / IPv6 адрес | Выделенный субдомен (для HTTPS) |
+
+---
+
+## 🌐 Подготовка DNS: выделенный субдомен (`books.MYDOMAIN.COM`)
+
+Для удобного доступа к библиотеке, корректной работы мобильного PWA (офлайн-кэш Service Worker требует безопасного HTTPS-соединения) и защищенного подключения читалок по OPDS предполагается использование **отдельного субдомена** (например, `books.MYDOMAIN.COM`):
+
+1. **Создайте A-запись в панели DNS вашего регистратора/провайдера:**
+   - **Тип записи:** `A`
+   - **Хост / Имя:** `books` (или полное имя `books.MYDOMAIN.COM`)
+   - **Значение (IP):** публичный IPv4-адрес вашего VPS
+   - **TTL:** `300` сек (5 минут) или значение по умолчанию
+
+2. **(Опционально) AAAA-запись для IPv6:**
+   - Если сервер поддерживает IPv6, добавьте запись `AAAA` с IPv6-адресом сервера.
+
+3. **Проверьте применение DNS:**
+   ```bash
+   dig +short books.MYDOMAIN.COM
+   # или
+   nslookup books.MYDOMAIN.COM
+   ```
+   Ответом должен быть IP-адрес вашего VPS.
 
 ---
 
@@ -65,7 +88,7 @@ scp dist/boyan-linux-amd64.tar.gz root@IP_ВАШЕГО_СЕРВЕРА:/tmp/
 
 ### Шаг 3. Запуск установки на VPS
 
-Подключитесь к серверу по SSH и запустите автоматическую установку:
+Подключитесь к серверу по SSH и запустите автоматическую установку, указав ваш выделенный субдомен:
 
 ```bash
 ssh root@IP_ВАШЕГО_СЕРВЕРА
@@ -75,8 +98,8 @@ mkdir -p /tmp/boyan-pkg
 tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-pkg
 cd /tmp/boyan-pkg
 
-# Запуск инсталлятора
-sudo bash install.sh
+# Запуск инсталлятора с указанием вашего субдомена
+sudo bash install.sh books.MYDOMAIN.COM
 ```
 
 **Что делает автоматический инсталлятор `install.sh`:**
@@ -91,7 +114,8 @@ sudo bash install.sh
    - `/var/www/boyan/web-desktop` — статика десктопного фронтенда.
    - `/var/www/boyan/web-mobile` — статика мобильного PWA-ридера.
 3. Устанавливает и запускает службу `systemd` (`boyan.service`).
-4. Подключает готовый конфигурационный файл Nginx (`/etc/nginx/sites-available/boyan`).
+4. Настраивает виртуальный хост Nginx (`/etc/nginx/sites-available/boyan`) с проксированием и поддержкой ACME challenge для вашего субдомена.
+5. Автоматически запускает Certbot для выпуска бесплатного SSL-сертификата **Let's Encrypt** и перенаправления на **HTTPS**.
 
 ---
 
@@ -184,7 +208,7 @@ sudo chmod -R 755 /var/www/boyan
 
 ```ini
 [Unit]
-Description=Next-Gen OPDS Suite (Boyan) Server
+Description=Boyan Server
 After=network.target
 
 [Service]
@@ -225,9 +249,9 @@ sudo systemctl status boyan
 
 ---
 
-### 7. Настройка Nginx и HTTPS (SSL)
+### 7. Настройка Nginx
 
-Создайте файл конфигурации виртуального хоста `/etc/nginx/sites-available/boyan`:
+Создайте файл конфигурации виртуального хоста `/etc/nginx/sites-available/boyan` для вашего субдомена (например, `books.MYDOMAIN.COM`):
 
 ```nginx
 upstream boyan_backend {
@@ -239,9 +263,15 @@ server {
     listen 80;
     listen [::]:80;
     
-    server_name books.example.com; # Укажите ваш домен
+    # Выделенный субдомен вашей библиотеки
+    server_name books.MYDOMAIN.COM;
 
     client_max_body_size 200M;
+
+    # Валидация сертификатов Let's Encrypt (Certbot ACME challenge)
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     # Gzip сжатие
     gzip on;
@@ -310,15 +340,25 @@ sudo systemctl reload nginx
 
 ### 8. Бесплатный SSL-сертификат Let's Encrypt (HTTPS)
 
-Для того чтобы PWA-приложение работало автономно и сохраняло книги в офлайн, **HTTPS строго обязателен**.
+Для того чтобы PWA-приложение работало автономно и сохраняло книги в офлайн (Service Worker Cache API), а читалки безопасно синхронизировались по OPDS, **HTTPS строго обязателен**.
 
 Выпустите сертификат с автоматической настройкой Nginx:
 
 ```bash
-sudo certbot --nginx -d books.example.com
+sudo certbot --nginx -d books.MYDOMAIN.COM
 ```
 
-Certbot автоматически настроит перенаправление с HTTP на HTTPS и установит таймер автообновления сертификатов.
+**Что делает Certbot:**
+1. Подключается к удостоверяющему центру Let's Encrypt и проверяет владение субдоменом через ACME challenge.
+2. Генерирует доверенный SSL/TLS сертификат (`/etc/letsencrypt/live/books.MYDOMAIN.COM/`).
+3. Автоматически вносит в `/etc/nginx/sites-available/boyan` директивы SSL (порт 443) и настраивает перенаправление (301 Redirect) всех HTTP-запросов на HTTPS.
+4. Регистрирует системный таймер `certbot.timer` для автоматического продления сертификата каждые 60 дней.
+
+Проверка автоматического продления сертификата:
+
+```bash
+sudo certbot renew --dry-run
+```
 
 ---
 

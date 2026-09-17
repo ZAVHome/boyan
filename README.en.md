@@ -1,16 +1,20 @@
-# Next-Gen OPDS Suite ("Boyan")
-
 <p align="center">
-  <img src="docs/assets/banner.jpg" alt="Next-Gen OPDS Suite (Boyan)" width="100%" />
+  <img src="media/Boyan_logo_transparent.svg" alt="Boyan" width="130" />
 </p>
 
-[![Release](https://img.shields.io/badge/release-v0.0.1--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
+# Boyan
+ 
+<p align="center">
+  <img src="docs/assets/banner.jpg" alt="Boyan" width="100%" />
+</p>
+
+[![Release](https://img.shields.io/badge/release-v0.0.2--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
 [![Go Version](https://img.shields.io/badge/go-1.23%2B-00ADD8.svg?logo=go)](https://golang.org)
 [![Vue 3](https://img.shields.io/badge/vue-3.5-4FC08D.svg?logo=vue.js)](https://vuejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/ZAVHome/boyan/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAVHome/boyan/actions)
 
-> 📚 A modern, modular, open-source eBook catalog, in-browser reading suite, and network distribution system supporting OPDS v1.2 and OPDS v2.0 protocols.
+> 📚 **Boyan** is a modern, modular, open-source Next-Gen OPDS Suite for eBook cataloging, in-browser reading, and network distribution supporting OPDS v1.2 and OPDS v2.0 protocols.
 
 [Русская версия (README.md)](README.md)
 

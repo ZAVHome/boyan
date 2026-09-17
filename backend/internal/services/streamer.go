@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"boyan/internal/i18n"
 	"boyan/internal/parsers/zip"
 	"boyan/internal/storage"
 )
@@ -28,15 +30,25 @@ func NewStreamer(repo *storage.BookRepository, libraryDir string, streamFromZIP 
 	}
 }
 
+func writeStreamerError(w http.ResponseWriter, r *http.Request, status int, code string, args ...any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	tr := i18n.FromContext(r.Context())
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": tr.T(code, args...),
+		"code":  code,
+	})
+}
+
 // ServeBookFile отдает файл книги в HTTP-ответ. Если запрошен fb2, а на диске fb2.zip — стримит из zip без распаковки.
 func (s *Streamer) ServeBookFile(w http.ResponseWriter, r *http.Request, bookID, format string) {
 	file, err := s.repo.GetBookFileByFormat(r.Context(), bookID, format)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		writeStreamerError(w, r, http.StatusInternalServerError, "DB_ERROR")
 		return
 	}
 	if file == nil {
-		http.Error(w, `{"error":"file format not found for this book"}`, http.StatusNotFound)
+		writeStreamerError(w, r, http.StatusNotFound, "FORMAT_NOT_FOUND")
 		return
 	}
 
@@ -50,13 +62,13 @@ func (s *Streamer) ServeBookFile(w http.ResponseWriter, r *http.Request, bookID,
 	fileFormat := strings.ToLower(file.Format)
 
 	if s.streamFromZIP && reqFormat == "fb2" && (fileFormat == "fb2.zip" || strings.HasSuffix(strings.ToLower(file.FilePath), ".zip")) {
-		s.streamFB2FromZip(w, fullPath, downloadName)
+		s.streamFB2FromZip(w, r, fullPath, downloadName)
 		return
 	}
 
 	// Прямая отдача с диска через http.ServeFile (с поддержкой Range и кеширования)
 	if _, err := os.Stat(fullPath); err != nil {
-		http.Error(w, `{"error":"file not found on disk"}`, http.StatusNotFound)
+		writeStreamerError(w, r, http.StatusNotFound, "FILE_NOT_FOUND")
 		return
 	}
 
@@ -67,10 +79,10 @@ func (s *Streamer) ServeBookFile(w http.ResponseWriter, r *http.Request, bookID,
 	http.ServeFile(w, r, fullPath)
 }
 
-func (s *Streamer) streamFB2FromZip(w http.ResponseWriter, zipPath, downloadName string) {
+func (s *Streamer) streamFB2FromZip(w http.ResponseWriter, r *http.Request, zipPath, downloadName string) {
 	rc, err := zip.ExtractFB2Stream(zipPath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to stream from zip: %v"}`, err), http.StatusInternalServerError)
+		writeStreamerError(w, r, http.StatusInternalServerError, "ZIP_STREAM_FAILED", err)
 		return
 	}
 	defer rc.Close()

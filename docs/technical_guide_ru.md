@@ -1,4 +1,6 @@
-# Техническое руководство: Next-Gen OPDS Suite («Боян»)
+# Техническое руководство: «Боян»
+
+<img src="assets/logo.svg" align="right" width="90" alt="Боян" />
 
 Техническая документация для системных администраторов, DevOps-инженеров и разработчиков проекта **«Боян»**.
 
@@ -162,12 +164,37 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 - **MIME-тип:** `application/opds+json`
 - Формирует спецификацию OPDS 2.0 с объектами `metadata`, `links`, `navigation` и массивом публикаций `publications`.
 
+### Мультиязычность и локализация каталогов (Backend i18n)
+
+Бэкенд поддерживает динамическую локализацию фидов OPDS v1.2 и v2.0 на лету (подробности в [ADR-15](decisions/15_backend_i18n_architecture.md)):
+
+- **E-Ink читалки (PocketBook, KOReader, Moon+ Reader):** поддерживают прямое переключение языка через URL фида:
+  - `GET /opds/v1/feed.xml?lang=en` — все разделы (*By Authors*, *By Series*, *Recent Additions*, *Search Results*) и дескриптор OpenSearch отдаются на английском языке.
+  - `GET /opds/v1/feed.xml?lang=ru` — разделы отдаются на русском языке.
+- **Определение языка по заголовкам:** клиенты, отправляющие `Accept-Language: en-US,en;q=0.9`, автоматически получают англоязычные фиды.
+- **Язык по умолчанию:** настраивается в `config.yaml` параметром `server.default_language: "ru"`.
+
 ---
 
 ## 6. REST API и документация OpenAPI/Swagger
 
 Все эндпоинты начинаются с префикса `/api/v1/`. Интерактивная документация доступна по адресу:
 👉 `http://localhost:8080/api/v1/docs/index.html`
+
+### Мультиязычность и формат ошибок REST API
+
+Ошибки REST API отдаются в стандартизированном гибридном формате:
+
+```json
+{
+  "error": "Неверное имя пользователя или пароль",
+  "code": "AUTH_INVALID_CREDENTIALS"
+}
+```
+
+- Поле `error` содержит локализованный текст на языке пользователя (на основе `?lang=` или заголовка `Accept-Language`).
+- Поле `code` содержит стабильный машиночитаемый идентификатор в `SCREAMING_SNAKE_CASE`.
+- Это позволяет простым внешним клиентам выводить текст ошибки напрямую, а умным клиентам (Vue 3 SPA/PWA) при необходимости переопределять сообщения через словарь `vue-i18n`.
 
 ### Основные группы маршрутов
 
@@ -291,7 +318,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 
    ```ini
    [Unit]
-   Description=Next-Gen OPDS Suite (Boyan) Server
+   Description=Boyan Server
    After=network.target
 
    [Service]

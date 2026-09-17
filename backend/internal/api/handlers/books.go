@@ -42,7 +42,7 @@ func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 
 	books, total, err := h.repo.SearchBooksFTS(r.Context(), query, offset, perPage)
 	if err != nil {
-		http.Error(w, `{"error":"search books failed"}`, http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "SEARCH_FAILED")
 		return
 	}
 
@@ -64,17 +64,17 @@ func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 func (h *BooksHandler) GetBook(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, `{"error":"missing book id"}`, http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_ID_REQUIRED")
 		return
 	}
 
 	book, err := h.repo.GetBookByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
 		return
 	}
 	if book == nil {
-		http.Error(w, `{"error":"book not found"}`, http.StatusNotFound)
+		writeAPIError(w, r, http.StatusNotFound, "BOOK_NOT_FOUND")
 		return
 	}
 
@@ -86,13 +86,13 @@ func (h *BooksHandler) GetBook(w http.ResponseWriter, r *http.Request) {
 func (h *BooksHandler) GetCover(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "missing book id", http.StatusBadRequest)
+		writeAPIError(w, r, http.StatusBadRequest, "BOOK_ID_REQUIRED")
 		return
 	}
 
 	filePath, ok := h.coverCache.GetCoverPath(id)
 	if !ok {
-		http.Error(w, "cover not found", http.StatusNotFound)
+		writeAPIError(w, r, http.StatusNotFound, "COVER_NOT_FOUND")
 		return
 	}
 

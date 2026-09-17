@@ -1,4 +1,4 @@
--- Инициализация схемы базы данных Next-Gen OPDS Suite (Boyan)
+-- Инициализация схемы базы данных «Боян» (Boyan)
 
 CREATE TABLE IF NOT EXISTS books (
     id TEXT PRIMARY KEY,

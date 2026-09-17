@@ -218,5 +218,118 @@ func TestSendBookCardMarkup(t *testing.T) {
 		},
 	}
 
-	bot.sendBookCard(42, book)
+	bot.sendBookCard(42, book, LangRU)
+	bot.sendBookCard(42, book, LangEN)
+}
+
+func TestI18nLanguageDetection(t *testing.T) {
+	tests := []struct {
+		code     string
+		expected Lang
+	}{
+		{"ru", LangRU},
+		{"RU", LangRU},
+		{"ru-RU", LangRU},
+		{"be", LangRU},
+		{"uk", LangRU},
+		{"en", LangEN},
+		{"EN", LangEN},
+		{"en-US", LangEN},
+		{"en-GB", LangEN},
+		{"de", LangEN}, // default fallback for other foreign languages
+		{"fr", LangEN},
+		{"", LangRU},   // empty default
+	}
+
+	for _, tt := range tests {
+		got := NormalizeLang(tt.code)
+		if got != tt.expected {
+			t.Errorf("NormalizeLang(%q) = %q, want %q", tt.code, got, tt.expected)
+		}
+	}
+
+	// Test UserLang
+	if UserLang(nil) != LangRU {
+		t.Errorf("UserLang(nil) should be LangRU")
+	}
+	if UserLang(&User{LanguageCode: "en"}) != LangEN {
+		t.Errorf("UserLang(en) should be LangEN")
+	}
+	if UserLang(&User{LanguageCode: "ru"}) != LangRU {
+		t.Errorf("UserLang(ru) should be LangRU")
+	}
+}
+
+func TestI18nManualSwitch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		resp := apiResponse[map[string]any]{OK: true, Result: body}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	bot := NewBot(cfg, nil, nil)
+	bot.client.baseURL = server.URL
+	ctx := context.Background()
+
+	chatID := int64(777)
+	user := &User{ID: 1, FirstName: "Alex", LanguageCode: "ru"}
+
+	// Initially detected as RU
+	if bot.getUserLang(chatID, user) != LangRU {
+		t.Errorf("expected initial lang RU")
+	}
+
+	// Send /lang en
+	bot.dispatchUpdate(ctx, Update{
+		UpdateID: 10,
+		Message: &Message{
+			MessageID: 10,
+			Chat:      Chat{ID: chatID, Type: "private"},
+			From:      user,
+			Text:      "/lang en",
+		},
+	})
+
+	// Now should be LangEN
+	if bot.getUserLang(chatID, user) != LangEN {
+		t.Errorf("expected switched lang EN")
+	}
+
+	// Send /lang ru
+	bot.dispatchUpdate(ctx, Update{
+		UpdateID: 11,
+		Message: &Message{
+			MessageID: 11,
+			Chat:      Chat{ID: chatID, Type: "private"},
+			From:      user,
+			Text:      "/lang ru",
+		},
+	})
+
+	if bot.getUserLang(chatID, user) != LangRU {
+		t.Errorf("expected switched lang RU")
+	}
+}
+
+func TestI18nMessagesContents(t *testing.T) {
+	ru := GetMessages(LangRU)
+	en := GetMessages(LangEN)
+
+	if !strings.Contains(ru.StartHelp, "Добро пожаловать") {
+		t.Errorf("expected Russian welcome in ru StartHelp")
+	}
+	if !strings.Contains(en.StartHelp, "Welcome") {
+		t.Errorf("expected English welcome in en StartHelp")
+	}
+
+	if !strings.Contains(ru.HappyReading("Война и мир"), "Приятного чтения от <b>Бояна</b>") {
+		t.Errorf("expected Russian happy reading caption")
+	}
+	if !strings.Contains(en.HappyReading("War and Peace"), "Enjoy reading with <b>Boyan</b>") {
+		t.Errorf("expected English happy reading caption")
+	}
 }

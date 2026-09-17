@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"boyan/internal/auth"
+	"boyan/internal/i18n"
 	"boyan/internal/models"
 )
 
@@ -31,7 +32,7 @@ func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := auth.UserFromContext(r.Context())
 		if !ok || claims == nil {
-			writeJSONError(w, http.StatusUnauthorized, "Unauthorized: authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -43,11 +44,11 @@ func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := auth.UserFromContext(r.Context())
 		if !ok || claims == nil {
-			writeJSONError(w, http.StatusUnauthorized, "Unauthorized: authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED")
 			return
 		}
 		if claims.Role != models.RoleAdmin {
-			writeJSONError(w, http.StatusForbidden, "Forbidden: administrator privileges required")
+			writeJSONError(w, r, http.StatusForbidden, "AUTH_ADMIN_REQUIRED")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -77,8 +78,12 @@ func extractToken(r *http.Request) string {
 	return ""
 }
 
-func writeJSONError(w http.ResponseWriter, code int, message string) {
+func writeJSONError(w http.ResponseWriter, r *http.Request, code int, errCode string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+	tr := i18n.FromContext(r.Context())
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": tr.T(errCode),
+		"code":  errCode,
+	})
 }

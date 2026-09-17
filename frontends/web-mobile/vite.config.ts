@@ -8,11 +8,11 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png', 'robots.txt'],
+      includeAssets: ['favicon.ico', 'favicon-32x32.png', 'favicon.svg', 'logo.svg', 'apple-touch-icon.png', 'robots.txt'],
       manifest: {
         name: 'Боян — Мобильная читалка и библиотека',
         short_name: 'Боян',
-        description: 'Touch-first PWA и E-Ink ридер для комплекса Next-Gen OPDS Suite',
+        description: 'Touch-first PWA и E-Ink ридер для библиотеки Боян',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

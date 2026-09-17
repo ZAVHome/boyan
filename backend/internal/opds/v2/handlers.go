@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"boyan/internal/config"
+	"boyan/internal/i18n"
 	"boyan/internal/storage"
 )
 
@@ -23,6 +24,7 @@ func NewOPDSv2Handler(cfg *config.Config, repo *storage.BookRepository) *OPDSv2H
 // Catalog формирует корневой каталог OPDS v2.0.
 func (h *OPDSv2Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 
 	feed := Feed{
 		Metadata: Metadata{
@@ -41,10 +43,10 @@ func (h *OPDSv2Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		Navigation: []Link{
-			{Rel: "subsection", Href: baseURL + "/opds/v1/authors", Type: "application/atom+xml", Title: "По авторам"},
-			{Rel: "subsection", Href: baseURL + "/opds/v1/series", Type: "application/atom+xml", Title: "По сериям"},
-			{Rel: "subsection", Href: baseURL + "/opds/v1/genres", Type: "application/atom+xml", Title: "По жанрам"},
-			{Rel: "subsection", Href: baseURL + "/opds/v1/recent", Type: "application/atom+xml", Title: "Новинки"},
+			{Rel: "subsection", Href: baseURL + "/opds/v1/authors", Type: "application/atom+xml", Title: tr.T("opds.authors")},
+			{Rel: "subsection", Href: baseURL + "/opds/v1/series", Type: "application/atom+xml", Title: tr.T("opds.series")},
+			{Rel: "subsection", Href: baseURL + "/opds/v1/genres", Type: "application/atom+xml", Title: tr.T("opds.genres")},
+			{Rel: "subsection", Href: baseURL + "/opds/v1/recent", Type: "application/atom+xml", Title: tr.T("opds.recent")},
 		},
 	}
 
@@ -62,6 +64,7 @@ func (h *OPDSv2Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 // Search выполняет поиск книг по протоколу OPDS v2.0.
 func (h *OPDSv2Handler) Search(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	query := r.URL.Query().Get("query")
 	if query == "" {
 		query = r.URL.Query().Get("q")
@@ -69,8 +72,8 @@ func (h *OPDSv2Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 	feed := Feed{
 		Metadata: Metadata{
-			Title:       fmt.Sprintf("Результаты поиска: %s", query),
-			Description: fmt.Sprintf("Поиск по запросу '%s'", query),
+			Title:       tr.T("opds.search_results", query),
+			Description: tr.T("opds.search_query_desc", query),
 			Modified:    time.Now().UTC().Format(time.RFC3339),
 		},
 		Links: []Link{

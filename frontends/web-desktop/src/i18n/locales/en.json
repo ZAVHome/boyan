@@ -2,7 +2,7 @@
   "locale_name": "English",
   "app": {
     "title": "Boyan",
-    "subtitle": "Next-Gen OPDS Suite",
+    "subtitle": "Digital Library",
     "search_placeholder": "Search books by title, author, series...",
     "upload_btn": "Add Book",
     "login_btn": "Log In",

@@ -2,7 +2,7 @@
   "locale_name": "Русский",
   "app": {
     "title": "Боян",
-    "subtitle": "Next-Gen OPDS Suite",
+    "subtitle": "Цифровая библиотека",
     "search_placeholder": "Поиск книг по названию, автору, серии...",
     "upload_btn": "Добавить книгу",
     "login_btn": "Войти",

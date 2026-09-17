@@ -1,5 +1,5 @@
 [Unit]
-Description=Next-Gen OPDS Suite (Boyan) Server
+Description=Boyan Server
 After=network.target
 
 [Service]

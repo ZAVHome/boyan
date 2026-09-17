@@ -50,7 +50,7 @@ function handleAuthAction() {
       <!-- Логотип и название -->
       <router-link to="/" class="flex items-center gap-3 shrink-0 group focus:outline-none">
         <img
-          src="/logo.png"
+          src="/logo.svg"
           alt="Боян"
           class="w-10 h-10 rounded-full object-cover shadow-md shadow-amber-900/20 group-hover:scale-105 transition-transform"
         />

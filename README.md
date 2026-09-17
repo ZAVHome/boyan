@@ -1,16 +1,20 @@
-# Next-Gen OPDS Suite («Боян»)
-
 <p align="center">
-  <img src="docs/assets/banner.jpg" alt="Next-Gen OPDS Suite (Боян)" width="100%" />
+  <img src="media/Boyan_logo_transparent.svg" alt="Боян (Boyan)" width="130" />
 </p>
 
-[![Release](https://img.shields.io/badge/release-v0.0.1--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
+# Боян (Boyan)
+
+<p align="center">
+  <img src="docs/assets/banner.jpg" alt="Боян (Boyan)" width="100%" />
+</p>
+
+[![Release](https://img.shields.io/badge/release-v0.0.2--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
 [![Go Version](https://img.shields.io/badge/go-1.23%2B-00ADD8.svg?logo=go)](https://golang.org)
 [![Vue 3](https://img.shields.io/badge/vue-3.5-4FC08D.svg?logo=vue.js)](https://vuejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/ZAVHome/boyan/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAVHome/boyan/actions)
 
-> 📚 Модульный программный комплекс нового поколения для каталогизации, управления, онлайн-чтения и сетевой дистрибуции электронных книг по протоколам OPDS v1.2 и OPDS v2.0.
+> 📚 **Боян** — модульный программный комплекс с открытым исходным кодом (Next-Gen OPDS Suite) для каталогизации, управления, онлайн-чтения и сетевой дистрибуции электронных книг по протоколам OPDS v1.2 и OPDS v2.0.
 
 [English version (README.en.md)](README.en.md)
 

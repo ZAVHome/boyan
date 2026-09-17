@@ -14,7 +14,7 @@
 
       <div class="flex items-center gap-2" v-if="!title">
         <img
-          src="/logo.png"
+          src="/logo.svg"
           alt="Боян"
           class="w-7 h-7 rounded-full object-cover shadow-sm"
         />

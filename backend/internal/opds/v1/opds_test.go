@@ -176,3 +176,64 @@ func TestOPDSv1_NavigationAndFeeds(t *testing.T) {
 		t.Errorf("search result does not contain book: %s", recSearch.Body.String())
 	}
 }
+
+func TestOPDSv1_I18nLocalization(t *testing.T) {
+	router, _, cleanup := setupOPDSTestServer(t)
+	defer cleanup()
+
+	// 1. По умолчанию русский язык
+	recRU := httptest.NewRecorder()
+	reqRU := httptest.NewRequest(http.MethodGet, "/opds/v1/feed.xml", nil)
+	router.ServeHTTP(recRU, reqRU)
+	if recRU.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recRU.Code)
+	}
+	bodyRU := recRU.Body.String()
+	if !strings.Contains(bodyRU, "<title>По авторам</title>") {
+		t.Errorf("expected RU 'По авторам' in default feed, got: %s", bodyRU)
+	}
+	if !strings.Contains(bodyRU, "<title>По сериям и циклам</title>") {
+		t.Errorf("expected RU 'По сериям и циклам' in default feed")
+	}
+
+	// 2. Английский язык через query-параметр ?lang=en (для PocketBook / KOReader)
+	recEN := httptest.NewRecorder()
+	reqEN := httptest.NewRequest(http.MethodGet, "/opds/v1/feed.xml?lang=en", nil)
+	router.ServeHTTP(recEN, reqEN)
+	if recEN.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recEN.Code)
+	}
+	bodyEN := recEN.Body.String()
+	if !strings.Contains(bodyEN, "<title>By Authors</title>") {
+		t.Errorf("expected EN 'By Authors' with ?lang=en, got: %s", bodyEN)
+	}
+	if !strings.Contains(bodyEN, "<title>By Series</title>") {
+		t.Errorf("expected EN 'By Series' with ?lang=en, got: %s", bodyEN)
+	}
+	if !strings.Contains(bodyEN, "<title>Recent Additions</title>") {
+		t.Errorf("expected EN 'Recent Additions' with ?lang=en, got: %s", bodyEN)
+	}
+
+	// 3. Английский язык через заголовок Accept-Language
+	recHeader := httptest.NewRecorder()
+	reqHeader := httptest.NewRequest(http.MethodGet, "/opds/v1/feed.xml", nil)
+	reqHeader.Header.Set("Accept-Language", "en-US,en;q=0.9,ru;q=0.8")
+	router.ServeHTTP(recHeader, reqHeader)
+	if recHeader.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recHeader.Code)
+	}
+	if !strings.Contains(recHeader.Body.String(), "<title>By Authors</title>") {
+		t.Errorf("expected EN 'By Authors' with Accept-Language header, got: %s", recHeader.Body.String())
+	}
+
+	// 4. OpenSearch дескриптор на английском
+	recOS := httptest.NewRecorder()
+	reqOS := httptest.NewRequest(http.MethodGet, "/opds/v1/opensearch.xml?lang=en", nil)
+	router.ServeHTTP(recOS, reqOS)
+	if recOS.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recOS.Code)
+	}
+	if !strings.Contains(recOS.Body.String(), "<Description>Search library catalog</Description>") {
+		t.Errorf("expected localized description in opensearch.xml, got: %s", recOS.Body.String())
+	}
+}

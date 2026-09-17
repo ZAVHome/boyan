@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"boyan/internal/config"
+	"boyan/internal/i18n"
 	"boyan/internal/storage"
 
 	"github.com/go-chi/chi/v5"
@@ -25,6 +26,7 @@ func NewOPDSv1Handler(cfg *config.Config, repo *storage.BookRepository) *OPDSv1H
 // RootFeed формирует главный навигационный каталог библиотеки.
 func (h *OPDSv1Handler) RootFeed(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	feed := NewFeed("urn:boyan:opds:v1:root", h.cfg.OPDS.Title)
 
 	feed.Links = []Link{
@@ -37,36 +39,36 @@ func (h *OPDSv1Handler) RootFeed(w http.ResponseWriter, r *http.Request) {
 	feed.Entries = []Entry{
 		{
 			ID:      "urn:boyan:section:authors",
-			Title:   "По авторам",
+			Title:   tr.T("opds.authors"),
 			Updated: feed.Updated,
-			Content: &TextElem{Type: "text", Value: "Поиск книг по алфавитному каталогу авторов"},
+			Content: &TextElem{Type: "text", Value: tr.T("opds.authors_desc")},
 			Links: []Link{
 				{Rel: RelSubsection, Href: baseURL + "/opds/v1/authors", Type: MimeTypeAtomNavigation},
 			},
 		},
 		{
 			ID:      "urn:boyan:section:series",
-			Title:   "По сериям и циклам",
+			Title:   tr.T("opds.series"),
 			Updated: feed.Updated,
-			Content: &TextElem{Type: "text", Value: "Книжные циклы и сериалы с нумерацией частей"},
+			Content: &TextElem{Type: "text", Value: tr.T("opds.series_desc")},
 			Links: []Link{
 				{Rel: RelSubsection, Href: baseURL + "/opds/v1/series", Type: MimeTypeAtomNavigation},
 			},
 		},
 		{
 			ID:      "urn:boyan:section:genres",
-			Title:   "По жанрам и категориям",
+			Title:   tr.T("opds.genres"),
 			Updated: feed.Updated,
-			Content: &TextElem{Type: "text", Value: "Тематическое дерево жанров FictionBook"},
+			Content: &TextElem{Type: "text", Value: tr.T("opds.genres_desc")},
 			Links: []Link{
 				{Rel: RelSubsection, Href: baseURL + "/opds/v1/genres", Type: MimeTypeAtomNavigation},
 			},
 		},
 		{
 			ID:      "urn:boyan:section:recent",
-			Title:   "Новые поступления",
+			Title:   tr.T("opds.recent"),
 			Updated: feed.Updated,
-			Content: &TextElem{Type: "text", Value: "Недавно добавленные в библиотеку книги"},
+			Content: &TextElem{Type: "text", Value: tr.T("opds.recent_desc")},
 			Links: []Link{
 				{Rel: RelSubsection, Href: baseURL + "/opds/v1/recent", Type: MimeTypeAtomAcquisition},
 			},
@@ -79,7 +81,8 @@ func (h *OPDSv1Handler) RootFeed(w http.ResponseWriter, r *http.Request) {
 // AuthorsAlpha отдает алфавитный указатель авторов.
 func (h *OPDSv1Handler) AuthorsAlpha(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
-	feed := NewFeed("urn:boyan:opds:v1:authors", "Авторы по алфавиту")
+	tr := i18n.FromContext(r.Context())
+	feed := NewFeed("urn:boyan:opds:v1:authors", tr.T("opds.authors_alpha"))
 
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: baseURL + "/opds/v1/authors", Type: MimeTypeAtomNavigation},
@@ -107,8 +110,9 @@ func (h *OPDSv1Handler) AuthorsAlpha(w http.ResponseWriter, r *http.Request) {
 // AuthorsList отдает авторов на заданную букву.
 func (h *OPDSv1Handler) AuthorsList(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	letter := chi.URLParam(r, "letter")
-	feed := NewFeed(fmt.Sprintf("urn:boyan:authors:letter:%s", letter), fmt.Sprintf("Авторы на букву %s", letter))
+	feed := NewFeed(fmt.Sprintf("urn:boyan:authors:letter:%s", letter), tr.T("opds.authors_letter", letter))
 
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: fmt.Sprintf("%s/opds/v1/authors/alpha/%s", baseURL, url.PathEscape(letter)), Type: MimeTypeAtomNavigation},
@@ -136,10 +140,11 @@ func (h *OPDSv1Handler) AuthorsList(w http.ResponseWriter, r *http.Request) {
 // AuthorBooks отдает книги выбранного автора.
 func (h *OPDSv1Handler) AuthorBooks(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	authorID := chi.URLParam(r, "id")
 
 	author, err := h.repo.GetAuthorByID(r.Context(), authorID)
-	title := "Книги автора"
+	title := tr.T("opds.author_books")
 	if err == nil && author != nil {
 		title = author.Name
 	}
@@ -164,7 +169,8 @@ func (h *OPDSv1Handler) AuthorBooks(w http.ResponseWriter, r *http.Request) {
 // SeriesAlpha отдает алфавитный указатель серий.
 func (h *OPDSv1Handler) SeriesAlpha(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
-	feed := NewFeed("urn:boyan:opds:v1:series", "Серии по алфавиту")
+	tr := i18n.FromContext(r.Context())
+	feed := NewFeed("urn:boyan:opds:v1:series", tr.T("opds.series_alpha"))
 
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: baseURL + "/opds/v1/series", Type: MimeTypeAtomNavigation},
@@ -192,8 +198,9 @@ func (h *OPDSv1Handler) SeriesAlpha(w http.ResponseWriter, r *http.Request) {
 // SeriesList отдает серии на букву.
 func (h *OPDSv1Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	letter := chi.URLParam(r, "letter")
-	feed := NewFeed(fmt.Sprintf("urn:boyan:series:letter:%s", letter), fmt.Sprintf("Серии на букву %s", letter))
+	feed := NewFeed(fmt.Sprintf("urn:boyan:series:letter:%s", letter), tr.T("opds.series_letter", letter))
 
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: fmt.Sprintf("%s/opds/v1/series/alpha/%s", baseURL, url.PathEscape(letter)), Type: MimeTypeAtomNavigation},
@@ -221,10 +228,11 @@ func (h *OPDSv1Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 // SeriesBooks отдает книги выбранной серии по порядку номеров.
 func (h *OPDSv1Handler) SeriesBooks(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	seriesID := chi.URLParam(r, "id")
 
 	series, err := h.repo.GetSeriesByID(r.Context(), seriesID)
-	title := "Книги серии"
+	title := tr.T("opds.series_books")
 	if err == nil && series != nil {
 		title = series.Name
 	}
@@ -249,7 +257,8 @@ func (h *OPDSv1Handler) SeriesBooks(w http.ResponseWriter, r *http.Request) {
 // GenresCategories отдает список категорий жанров.
 func (h *OPDSv1Handler) GenresCategories(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
-	feed := NewFeed("urn:boyan:opds:v1:genres", "Категории жанров")
+	tr := i18n.FromContext(r.Context())
+	feed := NewFeed("urn:boyan:opds:v1:genres", tr.T("opds.genre_categories"))
 
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: baseURL + "/opds/v1/genres", Type: MimeTypeAtomNavigation},
@@ -348,6 +357,7 @@ func (h *OPDSv1Handler) GenreBooks(w http.ResponseWriter, r *http.Request) {
 // RecentBooks отдает новые поступления книг с пагинацией.
 func (h *OPDSv1Handler) RecentBooks(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
@@ -356,7 +366,7 @@ func (h *OPDSv1Handler) RecentBooks(w http.ResponseWriter, r *http.Request) {
 	perPage := h.cfg.OPDS.PageSize
 	offset := (page - 1) * perPage
 
-	feed := NewFeed("urn:boyan:opds:v1:recent", "Новые поступления")
+	feed := NewFeed("urn:boyan:opds:v1:recent", tr.T("opds.recent"))
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: fmt.Sprintf("%s/opds/v1/recent?page=%d", baseURL, page), Type: MimeTypeAtomAcquisition},
 		{Rel: RelUp, Href: baseURL + "/opds/v1/feed.xml", Type: MimeTypeAtomNavigation},
@@ -383,16 +393,17 @@ func (h *OPDSv1Handler) RecentBooks(w http.ResponseWriter, r *http.Request) {
 // OpenSearchDescriptor отдает XML дескриптор OpenSearch 1.1.
 func (h *OPDSv1Handler) OpenSearchDescriptor(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	w.Header().Set("Content-Type", MimeTypeOpenSearch+"; charset=utf-8")
 
 	searchXML := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
   <ShortName>%s</ShortName>
-  <Description>Поиск по каталогу библиотеки</Description>
+  <Description>%s</Description>
   <InputEncoding>UTF-8</InputEncoding>
   <OutputEncoding>UTF-8</OutputEncoding>
   <Url type="application/atom+xml;profile=opds-catalog;kind=acquisition" template="%s/opds/v1/search?q={searchTerms}&amp;page={startPage?}"/>
-</OpenSearchDescription>`, h.cfg.OPDS.Title, baseURL)
+</OpenSearchDescription>`, h.cfg.OPDS.Title, tr.T("opds.search_desc"), baseURL)
 
 	_, _ = w.Write([]byte(searchXML))
 }
@@ -400,6 +411,7 @@ func (h *OPDSv1Handler) OpenSearchDescriptor(w http.ResponseWriter, r *http.Requ
 // Search обрабатывает поисковые запросы читалок через FTS5.
 func (h *OPDSv1Handler) Search(w http.ResponseWriter, r *http.Request) {
 	baseURL := h.getBaseURL(r)
+	tr := i18n.FromContext(r.Context())
 	query := r.URL.Query().Get("q")
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
@@ -408,7 +420,7 @@ func (h *OPDSv1Handler) Search(w http.ResponseWriter, r *http.Request) {
 	perPage := h.cfg.OPDS.PageSize
 	offset := (page - 1) * perPage
 
-	feed := NewFeed("urn:boyan:opds:v1:search", fmt.Sprintf("Результаты поиска: %s", query))
+	feed := NewFeed("urn:boyan:opds:v1:search", tr.T("opds.search_results", query))
 	feed.Links = []Link{
 		{Rel: RelSelf, Href: fmt.Sprintf("%s/opds/v1/search?q=%s&page=%d", baseURL, url.QueryEscape(query), page), Type: MimeTypeAtomAcquisition},
 		{Rel: RelStart, Href: baseURL + "/opds/v1/feed.xml", Type: MimeTypeAtomNavigation},
