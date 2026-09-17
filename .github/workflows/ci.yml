@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Download Go modules
+        working-directory: backend
+        run: go mod download
+
+      - name: Run Unit & Integration Tests
+        working-directory: backend
+        run: go test -v -race ./...
+
+      - name: Build Server Binary
+        working-directory: backend
+        run: go build -v -ldflags="-s -w" -o ../bin/opds-server ./cmd/server
+
+  desktop-frontend:
+    name: Web Desktop (Vue 3)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontends/web-desktop/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontends/web-desktop
+        run: npm ci
+
+      - name: Build production bundle
+        working-directory: frontends/web-desktop
+        run: npm run build
+
+  mobile-frontend:
+    name: Web Mobile PWA (Vue 3)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontends/web-mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontends/web-mobile
+        run: npm ci
+
+      - name: Build PWA bundle
+        working-directory: frontends/web-mobile
+        run: npm run build

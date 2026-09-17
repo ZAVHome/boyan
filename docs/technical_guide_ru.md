@@ -43,7 +43,8 @@
                                   └─────────────────┘
 ```
 
-### Ключевые архитектурные решения:
+### Ключевые архитектурные решения
+
 1. **Автономный Go-бэкенд (Headless):** бэкенд не содержит монолитных HTML-шаблонов. Он предоставляет исключительно REST API (спецификация OpenAPI 3.0 / Swagger 2.0) и эндпоинты протоколов OPDS.
 2. **Экстремальная легковесность:** сервер на Go потребляет всего **4.5–5.7 МБ RAM** в боевом режиме под управлением systemd, что позволяет запускать его на самых слабых одноплатных компьютерах (Raspberry Pi, Orange Pi) и виртуальных машинах с объемом ОЗУ от 128 МБ.
 3. **CGO-Free сборка:** драйвер базы данных `modernc.org/sqlite` компилируется на 100% на чистом Go без зависимости от GCC/CGO, обеспечивая тривиальную кросс-компиляцию под любую ОС и архитектуру (Linux amd64/arm64, Windows, macOS).
@@ -57,12 +58,12 @@
 | **Backend Core** | Go 1.23+ / 1.26+ | Многопоточный микросервер, бизнес-логика |
 | **HTTP Маршрутизатор** | `go-chi/chi/v5` | Легковесный роутинг, middleware (CORS, Recoverer, RequestID, Slog) |
 | **База данных** | SQLite 3 (`modernc.org/sqlite`) | Режим WAL (Write-Ahead Logging), внешние ключи, FTS5 поиск |
-| **ORM / Data Access**| `jmoiron/sqlx` | Типизированная работа с SQL без тяжелых ORM-прослоек |
-| **Потоковые парсеры**| `encoding/xml`, `archive/zip` | Парсинг FB2 и FB2.ZIP на лету без распаковки на диск |
-| **Обработка обложек**| `golang.org/x/image` | Ресайз миниатюр, дисковый LRU-кэш |
+| **ORM / Data Access** | `jmoiron/sqlx` | Типизированная работа с SQL без тяжелых ORM-прослоек |
+| **Потоковые парсеры** | `encoding/xml`, `archive/zip` | Парсинг FB2 и FB2.ZIP на лету без распаковки на диск |
+| **Обработка обложек** | `golang.org/x/image` | Ресайз миниатюр, дисковый LRU-кэш |
 | **Файловый монитор** | `fsnotify/fsnotify` | Inotify-демон автоимпорта новых файлов с settle-delay |
 | **Desktop Frontend** | Vue 3 + Tailwind CSS + Pinia | Адаптивный SPA для ПК и планшетов (порт 3000) |
-| **Mobile Frontend**  | Vue 3 + Vite PWA + IndexedDB | Сенсорный PWA с офлайн-хранилищем и E-Ink профилем (порт 3001) |
+| **Mobile Frontend** | Vue 3 + Vite PWA + IndexedDB | Сенсорный PWA с офлайн-хранилищем и E-Ink профилем (порт 3001) |
 | **API Документация** | Swagger UI (`http-swagger/v2`) | Интерактивный каталог API на `/api/v1/docs` |
 
 ---
@@ -71,13 +72,15 @@
 
 База данных SQLite инициализируется автоматическими миграциями из встроенной файловой системы `embed.FS` (`backend/internal/storage/migrations/001_init.sql`).
 
-### Режим работы SQLite:
+### Режим работы SQLite
+
 - `PRAGMA journal_mode=WAL;` — параллельное чтение несколькими горутинами без блокировки писателем.
 - `PRAGMA synchronous=NORMAL;` — высокая производительность при надежной сохранности данных.
 - `PRAGMA foreign_keys=ON;` — каскадное обеспечение ссылочной целостности.
 - `PRAGMA busy_timeout=5000;` — ожидание освобождения блокировки до 5 секунд.
 
-### Основные таблицы:
+### Основные таблицы
+
 - `books`: метаданные (название, аннотация, язык, дата, путь к файлу, размер, хэш SHA-256, формат, наличие обложки).
 - `authors`, `book_authors`: авторы (ФИО) и связи Many-to-Many.
 - `series`, `book_series`: серии/циклы книг и порядковый номер тома.
@@ -87,8 +90,10 @@
 - `shelves`: персональные полки пользователя (`reading`, `to-read`, `finished`).
 - `reading_progress`: текущий прогресс (глава, процент прочтения, временная метка).
 
-### Полнотекстовый поиск (FTS5):
+### Полнотекстовый поиск (FTS5)
+
 Создана виртуальная таблица `books_fts` с токенизатором `porter` и триггерами на добавление, обновление и удаление:
+
 ```sql
 CREATE VIRTUAL TABLE books_fts USING fts5(
     title,
@@ -99,6 +104,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
     content_rowid='id'
 );
 ```
+
 Запросы используют синтаксис `books_fts MATCH ?` с автоматическим добавлением префиксного поиска `*`, что позволяет находить книги по неполным словам и словоформам на русском и английском языках.
 
 ---
@@ -121,7 +127,8 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
   [Обновление FTS5 индекса]
 ```
 
-### Особенности реализации:
+### Особенности реализации
+
 1. **Settle Delay (Антидребезг):** при копировании больших файлов по сети (FTP/Samba) события файловой системы группируются с задержкой в 500 мс, гарантируя, что парсер не начнет чтение недописанного файла.
 2. **Потоковое чтение ZIP без дискового оверхеда:** файл `.fb2.zip` открывается потоком `zip.Reader` в оперативной памяти. Извлекается только поток XML, без создания временных файлов на диске. Реализована строгая проверка пути (защита от уязвимости Zip Slip).
 3. **Автодетектирование кодировок:** модуль `html/charset` декодирует исходные данные из `windows-1251`, `cp866`, `koi8-r` в UTF-8 без потерь символов.
@@ -132,14 +139,17 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 ## 5. Спецификация протоколов OPDS v1.2 и v2.0
 
 ### OPDS v1.2 (Atom/XML)
+
 - **Эндпоинт:** `GET /opds/v1/feed.xml`
 - **MIME-тип:** `application/atom+xml;profile=opds-catalog;kind=acquisition`
 - **Структура фида:**
   - Навигационные ссылки (`rel="subsection"`) на каталоги авторов, серий, новинок и случайных книг.
   - Ссылка на OpenSearch дескриптор:
+
     ```xml
     <link rel="search" href="/opds/v1/search.xml" type="application/opensearchdescription+xml"/>
     ```
+
   - В элементах `<entry>` ссылки на скачивание книги формируются с корректными MIME-типами:
     - FB2: `application/x-fictionbook+xml`
     - FB2.ZIP: `application/x-fictionbook+zip`
@@ -147,6 +157,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
   - Ссылка на обложку: `rel="http://opds-spec.org/image"` с ссылкой на `/api/v1/covers/{id}`.
 
 ### OPDS v2.0 (JSON-LD)
+
 - **Эндпоинт:** `GET /opds/v2/catalog.json`
 - **MIME-тип:** `application/opds+json`
 - Формирует спецификацию OPDS 2.0 с объектами `metadata`, `links`, `navigation` и массивом публикаций `publications`.
@@ -158,35 +169,41 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 Все эндпоинты начинаются с префикса `/api/v1/`. Интерактивная документация доступна по адресу:
 👉 `http://localhost:8080/api/v1/docs/index.html`
 
-### Основные группы маршрутов:
+### Основные группы маршрутов
 
 #### Системные
+
 - `GET /health` — проверка работоспособности сервиса и статуса подключения к БД.
 - `GET /api/v1/ping` — быстрый ping.
 
 #### Аутентификация и пользователи
+
 - `POST /api/v1/auth/register` — регистрация нового пользователя.
 - `POST /api/v1/auth/login` — вход в систему, возвращает JWT-токен.
 - `GET /api/v1/auth/me` — получение профиля текущего пользователя (требуется заголовок `Authorization: Bearer <token>`).
 
 #### Каталог книг
+
 - `GET /api/v1/books` — получение списка книг с пагинацией (`page`, `limit`) и поиском (`search`).
 - `GET /api/v1/books/{id}` — получение подробной карточки книги со всеми связями.
 - `GET /api/v1/books/{id}/download` — скачивание исходного файла книги.
 - `GET /api/v1/covers/{id}` — отдача обложки (поддерживает заголовок `If-None-Match` и ответ `304 Not Modified`).
 
 #### Таксономия
+
 - `GET /api/v1/authors` — список авторов с количеством книг.
 - `GET /api/v1/series` — список серий/циклов.
 - `GET /api/v1/tags` — список жанров.
 
 #### Полки и прогресс
+
 - `GET /api/v1/shelves` — книги пользователя, сгруппированные по полкам (`reading`, `to-read`, `finished`).
 - `POST /api/v1/shelves/{shelf}/books/{bookId}` — добавление/перемещение книги на полку.
 - `GET /api/v1/progress/{bookId}` — получение сохраненного прогресса чтения.
 - `POST /api/v1/progress/{bookId}` — сохранение прогресса (`chapter`, `percent`).
 
 #### Администрирование
+
 - `GET /api/v1/admin/quarantine` — список файлов в карантине.
 - `POST /api/v1/admin/quarantine/{id}/restore` — принудительное восстановление файла в каталог.
 - `DELETE /api/v1/admin/quarantine/{id}` — удаление файла из карантина и с диска.
@@ -199,9 +216,11 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 Модуль `boyan/internal/importer/calibre` позволяет мигрировать или синхронизировать коллекцию из Calibre.
 
 - **Безопасный доступ:** база Calibre `metadata.db` открывается в строго монопольном режиме чтения SQLite:
+
   ```go
   db, err := sqlx.Open("sqlite", "file:"+dbPath+"?mode=ro")
   ```
+
   Это исключает риск повреждения файла `metadata.db` работающим приложением Calibre.
 - **Маппинг данных:**
   - Авторы из таблицы `authors` и связи `books_authors_link`.
@@ -211,10 +230,13 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
   - Форматы из таблицы `data`: поддержка одновременного учета нескольких форматов одного издания.
 - **Способы запуска:**
   1. Через аргумент командной строки:
+
      ```bash
      boyan --import-calibre /path/to/calibre/library
      ```
+
   2. Через REST API:
+
      ```bash
      curl -X POST http://localhost:8080/api/v1/admin/import/calibre \
           -H "Authorization: Bearer <ADMIN_JWT_TOKEN>" \
@@ -227,6 +249,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 ## 8. Архитектура Telegram-бота
 
 Демон бота (`boyan/internal/telegram`) работает на базе стандартного HTTP-клиента Go в режиме Long Polling (`getUpdates`):
+
 - **Независимость от фреймворков:** минимальный оверхед по памяти (менее 1 МБ дополнительного ОЗУ).
 - **Двунаправленная логика:**
   1. **Исходящий трафик (Поиск и выдача):**
@@ -246,17 +269,22 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 ### Вариант А: Развертывание в Linux / WSL2 под управлением systemd
 
 1. **Компиляция бинарника:**
+
    ```bash
    cd backend
    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/boyan cmd/server/main.go
    ```
+
 2. **Создание каталогов:**
+
    ```bash
    sudo mkdir -p /opt/boyan /var/lib/boyan /var/cache/boyan/covers /var/books
    sudo cp ../bin/boyan /opt/boyan/boyan
    sudo cp ../config.example.yaml /opt/boyan/config.yaml
    ```
+
 3. **Регистрация службы systemd (`/etc/systemd/system/boyan.service`):**
+
    ```ini
    [Unit]
    Description=Next-Gen OPDS Suite (Boyan) Server
@@ -274,7 +302,9 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
    [Install]
    WantedBy=multi-user.target
    ```
+
 4. **Запуск и проверка:**
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable boyan
@@ -285,6 +315,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 ### Вариант Б: Развертывание через Docker Compose
 
 В корне репозитория подготовлен `docker-compose.yml`:
+
 ```bash
 # Копирование конфигурации
 cp config.example.yaml config.yaml
@@ -292,7 +323,9 @@ cp config.example.yaml config.yaml
 # Сборка и запуск контейнеров
 docker compose up -d --build
 ```
+
 Доступные порты:
+
 - `8080` — Core Go Backend & OPDS
 - `3000` — Web Desktop Frontend
 - `3001` — Web Mobile PWA Frontend

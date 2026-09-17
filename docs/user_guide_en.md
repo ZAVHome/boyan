@@ -63,10 +63,12 @@ The desktop application is accessible in any modern web browser at: **`http://lo
 ### Built-in Universal Web Reader
 
 The in-browser reader automatically detects the format and delivers optimal typography:
+
 - **For FB2 and FB2.ZIP:** Instant chapter streaming with proper formatting, blockquotes, and embedded illustrations.
 - **For EPUB:** Smooth pagination powered by ePub.js.
 
-#### Reader Settings (Gear Icon in Top Toolbar):
+#### Reader Settings (Gear Icon in Top Toolbar)
+
 | Setting | Options | Description |
 | :--- | :--- | :--- |
 | **Theme** | Light, Sepia, Dark, OLED | Adjusts color palette to ambient lighting conditions |
@@ -81,6 +83,7 @@ The in-browser reader automatically detects the format and delivers optimal typo
 ### Virtual Shelves & Reading Progress
 
 Organize your library with built-in user shelves:
+
 1. **Reading (`reading`)** — Books you are currently reading.
 2. **Want to Read (`to-read`)** — Your reading backlog and wishlist.
 3. **Finished (`finished`)** — Completed books.
@@ -119,6 +122,7 @@ Boyan is a Progressive Web App (PWA) that installs as a native application witho
 ### Touch Gestures & Navigation
 
 The mobile reader is designed for touch interaction:
+
 - **Turn Pages:** Swipe left for next page, swipe right for previous page.
 - **Show Controls:** Tap the **center third of the screen** to toggle top and bottom toolbars (table of contents, progress slider, and typography settings).
 - **Book Action Sheet:** Tap the `⋮` button on any book card to bring up a bottom action sheet with fast actions (*Read*, *Save Offline*, *Change Shelf*).
@@ -126,6 +130,7 @@ The mobile reader is designed for touch interaction:
 ### Offline Library (Zero-Connectivity Reading)
 
 Take your favorite books anywhere, even without Wi-Fi or cellular service:
+
 1. Tap the **Download Offline** button (downward arrow icon) on any book card.
 2. The entire book payload and its cover are cached inside your device's browser database (`IndexedDB`).
 3. Navigate to the **Offline** tab in the bottom navigation bar:
@@ -135,6 +140,7 @@ Take your favorite books anywhere, even without Wi-Fi or cellular service:
 ### E-Ink High-Contrast Mode for E-Paper Readers
 
 For specialized Android e-readers (Onyx Boox, PocketBook, Likebook, Meebook):
+
 1. Open the reader menu or side drawer and choose the **"E-Ink"** theme.
 2. **Key E-Ink Optimizations:**
    - Background is forced to pure white (`#ffffff`) and text to pure black (`#000000`).
@@ -166,9 +172,11 @@ Replace `<SERVER_IP>` with your host machine's local network IP address (e.g., `
 3. Tap **Add Catalog**.
 4. In the **Name** field, enter: `Boyan`.
 5. In the **URL** field, enter:
+
    ```text
    http://192.168.1.50:8080/opds/v1/feed.xml
    ```
+
 6. Tap **Save** and open the catalog to browse and download books directly to your device storage.
 
 ---
@@ -179,9 +187,11 @@ Replace `<SERVER_IP>` with your host machine's local network IP address (e.g., `
 2. Tap **Add Catalog**.
 3. Set the name to `Boyan`.
 4. Enter the URL:
+
    ```text
    http://192.168.1.50:8080/opds/v1/feed.xml
    ```
+
 5. Confirm with **OK** to browse by authors, genres, or series.
 
 ---
@@ -202,9 +212,11 @@ Replace `<SERVER_IP>` with your host machine's local network IP address (e.g., `
 1. Open Moon+ Reader and switch to the **Net Library** tab.
 2. Tap the three dots menu icon (`⋮`) in the top right → **Add New Catalog**.
 3. Provide the name (`Boyan`) and URL:
+
    ```text
    http://192.168.1.50:8080/opds/v1/feed.xml
    ```
+
 4. Tap **OK**.
 
 ---
@@ -217,9 +229,11 @@ The built-in Telegram bot offers bidirectional communication: search and downloa
 
 1. Open your Telegram chat with the bot and send `/start`.
 2. Type any search term (e.g. `Asimov` or `Foundation`) or use the command:
+
    ```text
    /search Foundation
    ```
+
 3. The bot responds with matching titles, authors, and series descriptions.
 4. Inline buttons below each result display available download options (e.g., `📥 Download FB2.ZIP`, `📥 Download EPUB`).
 5. Tap the button for your preferred format; the bot will send the eBook file directly into your chat.
@@ -227,6 +241,7 @@ The built-in Telegram bot offers bidirectional communication: search and downloa
 ### Uploading Books to Your Library via Chat
 
 To add a book to your collection on the go:
+
 1. Send or forward any eBook document (`.fb2`, `.zip`, `.epub`, `.mobi`, `.pdf`) directly into the bot chat.
 2. The bot downloads the file, processes metadata, and adds it to the catalog:
    - **New Book:** The bot parses authors, genres, and cover images, responding: *"Book successfully added to the catalog!"*.
@@ -237,12 +252,15 @@ To add a book to your collection on the go:
 ## 6. Frequently Asked Questions (FAQ)
 
 ### Why does downloading a book inside a `.fb2.zip` archive feel instantaneous?
+
 Boyan parses and streams nested archives directly from RAM using Go buffers. It never writes temporary extracted files to disk.
 
 ### Can I sync reading progress between my phone and computer?
+
 Yes. When logged into your account, reading position and shelf statuses are saved in the central SQLite database and synced across all clients.
 
 ### What should I do if an uploaded book does not appear in search?
+
 1. Ensure the file extension is supported (`.fb2`, `.fb2.zip`, `.epub`).
 2. Check the **Quarantine** section in the web interface: if the XML was invalid or the file was an identical duplicate, it was moved to quarantine.
 3. Verify that the book storage directory is properly mounted and configured in `config.yaml`.

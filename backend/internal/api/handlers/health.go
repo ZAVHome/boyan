@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"boyan/internal/storage"
+	"boyan/internal/version"
 )
 
 // HealthHandler обрабатывает запросы проверки работоспособности сервера.
@@ -28,7 +29,7 @@ func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"db":        dbStatus,
 		"timestamp": time.Now().UTC(),
 		"service":   "Next-Gen OPDS Suite (Boyan)",
-		"version":   "0.1.0",
+		"version":   version.Full(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

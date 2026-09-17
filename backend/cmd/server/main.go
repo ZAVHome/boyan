@@ -17,10 +17,9 @@ import (
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
 	"boyan/internal/telegram"
+	"boyan/internal/version"
 	"boyan/internal/watcher"
 )
-
-const Version = "0.1.0"
 
 func main() {
 	var (
@@ -35,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("Next-Gen OPDS Suite (Boyan) v%s\n", Version)
+		fmt.Printf("Next-Gen OPDS Suite (Boyan) v%s\n", version.Full())
 		return
 	}
 
@@ -50,7 +49,7 @@ func main() {
 	setupLogger(cfg.Logging)
 
 	slog.Info("Starting Next-Gen OPDS Suite (Boyan)",
-		"version", Version,
+		"version", version.Full(),
 		"config", configPath,
 		"log_level", cfg.Logging.Level,
 	)

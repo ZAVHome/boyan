@@ -1,5 +1,11 @@
 # Next-Gen OPDS Suite («Боян»)
 
+[![Release](https://img.shields.io/badge/release-v0.0.1--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
+[![Go Version](https://img.shields.io/badge/go-1.23%2B-00ADD8.svg?logo=go)](https://golang.org)
+[![Vue 3](https://img.shields.io/badge/vue-3.5-4FC08D.svg?logo=vue.js)](https://vuejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/ZAVHome/boyan/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAVHome/boyan/actions)
+
 > 📚 Модульный программный комплекс нового поколения для каталогизации, управления, онлайн-чтения и сетевой дистрибуции электронных книг по протоколам OPDS v1.2 и OPDS v2.0.
 
 [English version (README.en.md)](README.en.md)
@@ -81,13 +87,17 @@
 ### Вариант 1: Запуск через Docker Compose (Рекомендуемый)
 
 1. Скопируйте файл конфигурации:
+
    ```bash
    cp config.example.yaml config.yaml
    ```
+
 2. Запустите сервисы:
+
    ```bash
    docker compose up -d
    ```
+
 3. Точки входа в системе:
    - **Десктопный интерфейс:** `http://localhost:3000`
    - **Мобильный PWA-интерфейс:** `http://localhost:3001`
@@ -98,14 +108,19 @@
 ### Вариант 2: Локальная разработка
 
 1. **Запуск бэкенда:**
+
    ```bash
    make run-backend
    ```
+
 2. **Запуск десктопного фронтенда:**
+
    ```bash
    make run-desktop
    ```
+
 3. **Запуск мобильного PWA фронтенда:**
+
    ```bash
    make run-mobile
    ```
@@ -117,6 +132,7 @@
 ```bash
 make test
 ```
+
 Все компоненты покрыты юнит- и интеграционными тестами (парсинг FB2/ZIP, LRU-кэш обложек, миграции SQLite, FTS5 поиск, обработка дубликатов и роуты REST API).
 
 ---

@@ -1,5 +1,11 @@
 # Next-Gen OPDS Suite ("Boyan")
 
+[![Release](https://img.shields.io/badge/release-v0.0.1--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
+[![Go Version](https://img.shields.io/badge/go-1.23%2B-00ADD8.svg?logo=go)](https://golang.org)
+[![Vue 3](https://img.shields.io/badge/vue-3.5-4FC08D.svg?logo=vue.js)](https://vuejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/ZAVHome/boyan/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAVHome/boyan/actions)
+
 > 📚 A modern, modular, open-source eBook catalog, in-browser reading suite, and network distribution system supporting OPDS v1.2 and OPDS v2.0 protocols.
 
 [Русская версия (README.md)](README.md)
@@ -81,13 +87,17 @@
 ### Option 1: Docker Compose (Recommended)
 
 1. Copy the configuration template:
+
    ```bash
    cp config.example.yaml config.yaml
    ```
+
 2. Start all services:
+
    ```bash
    docker compose up -d
    ```
+
 3. Access points:
    - **Desktop Web Interface:** `http://localhost:3000`
    - **Mobile PWA Interface:** `http://localhost:3001`
@@ -98,14 +108,19 @@
 ### Option 2: Local Development
 
 1. **Start Backend:**
+
    ```bash
    make run-backend
    ```
+
 2. **Start Desktop Frontend:**
+
    ```bash
    make run-desktop
    ```
+
 3. **Start Mobile PWA Frontend:**
+
    ```bash
    make run-mobile
    ```
@@ -117,6 +132,7 @@
 ```bash
 make test
 ```
+
 All system modules are thoroughly verified with unit and integration tests (FB2/ZIP streaming parsers, cover LRU cache, SQLite migrations, FTS5 search queries, duplicate quarantine, and REST API routes).
 
 ---

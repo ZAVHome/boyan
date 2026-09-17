@@ -43,7 +43,8 @@ Boyan strictly enforces a **Headless Architecture**, separating data storage and
                                   └─────────────────┘
 ```
 
-### Key Architectural Tenets:
+### Key Architectural Tenets
+
 1. **Autonomous Go Core (Headless):** The Go backend does not render monolithic HTML templates. It exposes a clean REST API compliant with OpenAPI 3.0 / Swagger 2.0 and native OPDS protocol feeds.
 2. **Ultra-Low Memory Footprint:** The Go service consumes merely **4.5–5.7 MB RAM** in production under systemd. It can easily run on low-power single-board computers (Raspberry Pi, Orange Pi) or cloud instances with as little as 128 MB RAM.
 3. **CGO-Free Builds:** Utilizing `modernc.org/sqlite` ensures 100% pure Go compilation with zero GCC or CGO toolchain requirements, making cross-compilation for any target (Linux amd64/arm64, Windows, macOS) instantaneous and trouble-free.
@@ -71,13 +72,15 @@ Boyan strictly enforces a **Headless Architecture**, separating data storage and
 
 The SQLite database is initialized through automatic migrations embedded in binary assets via `embed.FS` (`backend/internal/storage/migrations/001_init.sql`).
 
-### SQLite Configuration:
+### SQLite Configuration
+
 - `PRAGMA journal_mode=WAL;` — Concurrent multi-goroutine reads without writer blocking.
 - `PRAGMA synchronous=NORMAL;` — Optimal balance between high disk write throughput and crash resilience.
 - `PRAGMA foreign_keys=ON;` — Cascading relational integrity.
 - `PRAGMA busy_timeout=5000;` — Graceful wait time (up to 5s) before returning busy errors.
 
-### Core Tables:
+### Core Tables
+
 - `books`: Core book metadata (title, annotation, language, release date, path, file size, SHA-256 hash, format, cover existence).
 - `authors`, `book_authors`: Author records and Many-to-Many junction mappings.
 - `series`, `book_series`: Book series / cycles and volume sequence indices.
@@ -87,8 +90,10 @@ The SQLite database is initialized through automatic migrations embedded in bina
 - `shelves`: Virtual user shelves (`reading`, `to-read`, `finished`).
 - `reading_progress`: Reading state tracking (current chapter, completion percentage, last update timestamp).
 
-### Full-Text Search (FTS5):
+### Full-Text Search (FTS5)
+
 A virtual table `books_fts` is configured with the `porter` tokenizer and synchronized via triggers on `INSERT`, `UPDATE`, and `DELETE`:
+
 ```sql
 CREATE VIRTUAL TABLE books_fts USING fts5(
     title,
@@ -99,6 +104,7 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
     content_rowid='id'
 );
 ```
+
 Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allowing instant matching across Russian and English word forms.
 
 ---
@@ -121,7 +127,8 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
   [Update FTS5 Index]
 ```
 
-### Key Engineering Safeguards:
+### Key Engineering Safeguards
+
 1. **Settle Delay (Debouncing):** When large archives are uploaded over FTP, WebDAV, or Samba, file system events are debounced with a 500ms delay to prevent parsing partially transferred files.
 2. **In-Memory Streaming Without Disk Spooling:** `.fb2.zip` archives are opened via an in-memory `zip.Reader`. The parser extracts the XML stream directly into RAM buffers without ever writing temporary files to `/tmp`. Strict path normalization prevents Zip Slip vulnerabilities.
 3. **Automatic Encoding Detection:** The `html/charset` module dynamically transcodes input streams from `windows-1251`, `cp866`, or `koi8-r` into valid UTF-8.
@@ -132,14 +139,17 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
 ## 5. OPDS Protocols Specification (v1.2 & v2.0)
 
 ### OPDS v1.2 (Atom/XML)
+
 - **Endpoint:** `GET /opds/v1/feed.xml`
 - **MIME Type:** `application/atom+xml;profile=opds-catalog;kind=acquisition`
 - **Structure:**
   - Navigation links (`rel="subsection"`) pointing to authors, series, recent releases, and random selections.
   - OpenSearch descriptor link:
+
     ```xml
     <link rel="search" href="/opds/v1/search.xml" type="application/opensearchdescription+xml"/>
     ```
+
   - Acquisition links within `<entry>` tags map to proper MIME types:
     - FB2: `application/x-fictionbook+xml`
     - FB2.ZIP: `application/x-fictionbook+zip`
@@ -147,6 +157,7 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
   - Cover image link: `rel="http://opds-spec.org/image"` pointing to `/api/v1/covers/{id}`.
 
 ### OPDS v2.0 (JSON-LD)
+
 - **Endpoint:** `GET /opds/v2/catalog.json`
 - **MIME Type:** `application/opds+json`
 - Implements the modern OPDS 2.0 schema, including `metadata`, `links`, `navigation`, and a `publications` collection.
@@ -158,35 +169,41 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
 All REST endpoints are prefixed with `/api/v1/`. Interactive documentation and test forms are available at:
 👉 `http://localhost:8080/api/v1/docs/index.html`
 
-### Route Groups:
+### Route Groups
 
 #### System
+
 - `GET /health` — Service health and database connection verification.
 - `GET /api/v1/ping` — Fast network ping.
 
 #### Authentication & Profiles
+
 - `POST /api/v1/auth/register` — Create a new user account.
 - `POST /api/v1/auth/login` — Authenticate and receive a JWT bearer token.
 - `GET /api/v1/auth/me` — Inspect profile of the authenticated user.
 
 #### Catalog
+
 - `GET /api/v1/books` — Paginated book listing with `search`, `page`, and `limit` parameters.
 - `GET /api/v1/books/{id}` — Full book metadata and relation hierarchy.
 - `GET /api/v1/books/{id}/download` — Stream original book archive.
 - `GET /api/v1/covers/{id}` — Cover thumbnail delivery (supports `If-None-Match` and `304 Not Modified`).
 
 #### Taxonomy
+
 - `GET /api/v1/authors` — Authors list with associated book counts.
 - `GET /api/v1/series` — Book series listing.
 - `GET /api/v1/tags` — Canonical genre taxonomy.
 
 #### Shelves & Reading Progress
+
 - `GET /api/v1/shelves` — User books partitioned by shelf (`reading`, `to-read`, `finished`).
 - `POST /api/v1/shelves/{shelf}/books/{bookId}` — Move book to a shelf.
 - `GET /api/v1/progress/{bookId}` — Retrieve reading position.
 - `POST /api/v1/progress/{bookId}` — Record reading progress (`chapter`, `percent`).
 
 #### Administration
+
 - `GET /api/v1/admin/quarantine` — List quarantined files.
 - `POST /api/v1/admin/quarantine/{id}/restore` — Force import quarantined file into the library.
 - `DELETE /api/v1/admin/quarantine/{id}` — Permanently delete file from disk.
@@ -199,9 +216,11 @@ All REST endpoints are prefixed with `/api/v1/`. Interactive documentation and t
 The `boyan/internal/importer/calibre` module imports existing collections from Calibre libraries.
 
 - **Read-Only Concurrency:** The Calibre `metadata.db` database is opened in strict read-only mode:
+
   ```go
   db, err := sqlx.Open("sqlite", "file:"+dbPath+"?mode=ro")
   ```
+
   This eliminates any risk of database corruption even if the Calibre desktop app is actively running.
 - **Metadata Ingestion:**
   - Extracts authors from `authors` and `books_authors_link`.
@@ -211,10 +230,13 @@ The `boyan/internal/importer/calibre` module imports existing collections from C
   - Links all physical book format files listed in `data`.
 - **Execution Options:**
   1. CLI Flag:
+
      ```bash
      boyan --import-calibre /path/to/calibre/library
      ```
+
   2. REST API:
+
      ```bash
      curl -X POST http://localhost:8080/api/v1/admin/import/calibre \
           -H "Authorization: Bearer <ADMIN_TOKEN>" \
@@ -227,6 +249,7 @@ The `boyan/internal/importer/calibre` module imports existing collections from C
 ## 8. Telegram Bot Architecture
 
 The Telegram daemon (`boyan/internal/telegram`) communicates directly with the Telegram Bot API using native Go HTTP long-polling (`getUpdates`):
+
 - **Zero Heavy Frameworks:** Minimal memory overhead (< 1 MB RAM).
 - **Dual Pipeline:**
   1. **Outbound Flow (Search & Download):**
@@ -246,17 +269,22 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
 ### Option A: Linux / WSL2 Deployment Under systemd
 
 1. **Build the Linux Binary:**
+
    ```bash
    cd backend
    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/boyan cmd/server/main.go
    ```
+
 2. **Directory Structure Setup:**
+
    ```bash
    sudo mkdir -p /opt/boyan /var/lib/boyan /var/cache/boyan/covers /var/books
    sudo cp ../bin/boyan /opt/boyan/boyan
    sudo cp ../config.example.yaml /opt/boyan/config.yaml
    ```
+
 3. **Register systemd Service (`/etc/systemd/system/boyan.service`):**
+
    ```ini
    [Unit]
    Description=Next-Gen OPDS Suite (Boyan) Server
@@ -274,7 +302,9 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
    [Install]
    WantedBy=multi-user.target
    ```
+
 4. **Start & Verify:**
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable boyan
@@ -285,11 +315,14 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
 ### Option B: Docker Compose Deployment
 
 A complete multi-container configuration is provided in `docker-compose.yml`:
+
 ```bash
 cp config.example.yaml config.yaml
 docker compose up -d --build
 ```
+
 Exposed ports:
+
 - `8080` — Core Go Backend & OPDS feeds
 - `3000` — Web Desktop Frontend
 - `3001` — Web Mobile PWA Frontend
