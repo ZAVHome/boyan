@@ -14,6 +14,7 @@ import (
 	"boyan/internal/models"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
+	"boyan/internal/watcher"
 )
 
 func TestAPIHandlers(t *testing.T) {
@@ -39,6 +40,8 @@ func TestAPIHandlers(t *testing.T) {
 
 	bookRepo := storage.NewBookRepository(pool)
 	userRepo := storage.NewUserRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
 	coverCache, err := cover.NewCoverCache(coverDir, 10)
 	if err != nil {
 		t.Fatalf("NewCoverCache failed: %v", err)
@@ -52,7 +55,8 @@ func TestAPIHandlers(t *testing.T) {
 	_ = bookRepo.SaveBook(ctx, testBook, nil, nil, nil, nil)
 
 	cfg := config.DefaultConfig()
-	router := api.NewRouter(cfg, pool, bookRepo, userRepo, coverCache)
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
 
 	// 1. Проверка /health
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

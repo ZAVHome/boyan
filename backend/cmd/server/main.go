@@ -15,6 +15,7 @@ import (
 	"boyan/internal/config"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
+	"boyan/internal/watcher"
 )
 
 const Version = "0.1.0"
@@ -75,6 +76,8 @@ func main() {
 	// 5. Инициализация репозиториев
 	userRepo := storage.NewUserRepository(pool)
 	bookRepo := storage.NewBookRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
 
 	// Автоматическое создание учетной записи администратора по умолчанию
 	if cfg.Admin.DefaultUsername != "" && cfg.Admin.DefaultPassword != "" {
@@ -90,8 +93,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 7. Сборка HTTP роутера
-	router := api.NewRouter(cfg, pool, bookRepo, userRepo, coverCache)
+	// 7. Инициализация демона автоимпорта (Watcher)
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	if cfg.Storage.Watcher.Enabled {
+		if err := watcherInstance.Start(ctx); err != nil {
+			slog.Error("Failed to start ingest watcher", "err", err)
+		}
+	}
+
+	// 8. Сборка HTTP роутера
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
@@ -102,7 +113,7 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// 8. Запуск сервера в отдельной горутине
+	// 9. Запуск сервера в отдельной горутине
 	go func() {
 		slog.Info("HTTP server is listening",
 			"addr", addr,

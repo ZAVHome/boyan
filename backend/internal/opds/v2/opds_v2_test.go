@@ -15,6 +15,7 @@ import (
 	opdsv2 "boyan/internal/opds/v2"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
+	"boyan/internal/watcher"
 )
 
 func TestOPDSv2_CatalogAndSearch(t *testing.T) {
@@ -38,11 +39,14 @@ func TestOPDSv2_CatalogAndSearch(t *testing.T) {
 
 	bookRepo := storage.NewBookRepository(pool)
 	userRepo := storage.NewUserRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
 	coverCache, _ := cover.NewCoverCache(coverDir, 10)
 
 	cfg := config.DefaultConfig()
 	cfg.OPDS.AllowAnonymousReading = true
-	router := api.NewRouter(cfg, pool, bookRepo, userRepo, coverCache)
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
 
 	// Добавляем тестовую книгу
 	testBook := &models.Book{

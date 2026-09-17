@@ -12,3 +12,5 @@
 | **04** | [04_stage1_walkthrough.md](04_stage1_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 1 (тесты, развертывание в WSL2, потребление 5.3 МБ RAM). |
 | **05** | [05_stage2_implementation_plan.md](05_stage2_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 2: OPDS v1.2 (Atom/XML), OPDS v2.0 (JSON-LD), навигационные каналы, поиск OpenSearch, авторизация E-Ink и стриминг книг из ZIP. |
 | **06** | [06_stage2_walkthrough.md](06_stage2_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 2 (OPDS v1.2, OPDS v2.0, тесты, проверка в WSL2). |
+| **07** | [07_stage3_implementation_plan.md](07_stage3_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 3: REST API Gateway, JWT Auth, демон автоимпорта (fsnotify) папки /import и карантин дубликатов. |
+| **08** | [08_stage3_walkthrough.md](08_stage3_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 3 (REST API Gateway, JWT, Watcher fsnotify, дедупликация, 5.7 МБ RAM в WSL2). |
