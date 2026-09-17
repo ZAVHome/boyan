@@ -266,6 +266,10 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
 
 ## 9. Installation, Deployment & Operations Guide
 
+> 📘 **Comprehensive Production VPS Deployment Guide:**  
+> For step-by-step instructions on setting up a Linux VPS with an unprivileged system user, Nginx Reverse Proxy, Certbot SSL, and zero-build release deployment, see:  
+> 🚀 **[Linux VPS Installation Guide](vps_installation_guide_en.md)**.
+
 ### Option A: Linux / WSL2 Deployment Under systemd
 
 1. **Build the Linux Binary:**

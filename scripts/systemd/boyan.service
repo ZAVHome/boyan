@@ -1,0 +1,27 @@
+[Unit]
+Description=Next-Gen OPDS Suite (Boyan) Server
+After=network.target
+
+[Service]
+Type=simple
+User=boyan
+Group=boyan
+WorkingDirectory=/opt/boyan
+ExecStart=/opt/boyan/boyan --config /opt/boyan/config.yaml
+Restart=always
+RestartSec=3s
+LimitNOFILE=65535
+
+# Защита и изоляция процесса
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Логирование в systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=boyan
+
+[Install]
+WantedBy=multi-user.target

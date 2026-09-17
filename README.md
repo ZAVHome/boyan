@@ -22,6 +22,7 @@
 | :--- | :--- | :--- |
 | **Для пользователей** | 📖 [Руководство пользователя](docs/user_guide_ru.md) | 📖 [User Guide](docs/user_guide_en.md) |
 | **Для инженеров и админов** | 🛠️ [Техническое руководство](docs/technical_guide_ru.md) | 🛠️ [Technical Guide](docs/technical_guide_en.md) |
+| **Развертывание на сервере** | 🚀 [Установка на Linux VPS](docs/vps_installation_guide_ru.md) | 🚀 [Linux VPS Deployment](docs/vps_installation_guide_en.md) |
 | **Архитектурные решения** | 🏛️ [Реестр ADR](docs/decisions/README.md) | 🏛️ [Decisions Register](docs/decisions/README.md) |
 | **Интерактивный API (Swagger)** | 🌐 `http://localhost:8080/api/v1/docs/index.html` | — |
 
@@ -88,7 +89,12 @@
 
 ## 🚀 Быстрый старт
 
-### Вариант 1: Запуск через Docker Compose (Рекомендуемый)
+### Вариант 1: Развертывание на боевом сервере (Linux VPS) — Рекомендуемый
+
+Для установки на Ubuntu / Debian VPS с минимальным потреблением памяти (~5 МБ RAM) и готовым Nginx:
+👉 **[Подробная инструкция по установке на Linux VPS](docs/vps_installation_guide_ru.md)** (установка готового релиза в один клик без компиляторов на сервере).
+
+### Вариант 2: Запуск через Docker Compose
 
 1. Скопируйте файл конфигурации:
 

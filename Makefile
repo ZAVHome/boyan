@@ -26,6 +26,10 @@ deploy-wsl: build-linux
 	@echo "==> Deploying to WSL2 Ubuntu..."
 	wsl -d Ubuntu -u root -- bash scripts/wsl/deploy.sh
 
+package-vps:
+	@echo "==> Building standalone release package for Linux VPS..."
+	bash scripts/package-release.sh
+
 build-frontends: build-desktop build-mobile
 
 build-desktop:

@@ -22,6 +22,7 @@
 | :--- | :--- | :--- |
 | **For Readers & End Users** | 📖 [Руководство пользователя](docs/user_guide_ru.md) | 📖 [User Guide](docs/user_guide_en.md) |
 | **For Engineers & Admins** | 🛠️ [Техническое руководство](docs/technical_guide_ru.md) | 🛠️ [Technical Guide](docs/technical_guide_en.md) |
+| **Production VPS Deployment** | 🚀 [Установка на Linux VPS](docs/vps_installation_guide_ru.md) | 🚀 [Linux VPS Deployment](docs/vps_installation_guide_en.md) |
 | **Architectural Decisions** | 🏛️ [Реестр ADR](docs/decisions/README.md) | 🏛️ [Decisions Register](docs/decisions/README.md) |
 | **Interactive API Explorer (Swagger)** | — | 🌐 `http://localhost:8080/api/v1/docs/index.html` |
 
@@ -88,7 +89,12 @@
 
 ## 🚀 Quick Start
 
-### Option 1: Docker Compose (Recommended)
+### Option 1: Production Linux VPS Deployment (Recommended)
+
+For ultra-lightweight installation on Ubuntu / Debian VPS (~5 MB RAM footprint) with pre-configured Nginx & SSL:
+👉 **[Linux VPS Installation Guide](docs/vps_installation_guide_en.md)** (one-click pre-built release deployment with zero build tools on your server).
+
+### Option 2: Docker Compose
 
 1. Copy the configuration template:
 
