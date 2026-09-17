@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import Navbar from '@/components/common/Navbar.vue'
 import Sidebar from '@/components/common/Sidebar.vue'
 import UploadModal from '@/components/catalog/UploadModal.vue'
+import ConnectModal from '@/components/common/ConnectModal.vue'
 import { useCatalogStore } from '@/stores/catalog'
 
 const route = useRoute()
@@ -14,6 +15,7 @@ const catalogStore = useCatalogStore()
 const isReaderMode = computed(() => route.name === 'reader')
 const isAdminMode = computed(() => route.path.startsWith('/admin'))
 const showUploadModal = ref(false)
+const showConnectModal = ref(false)
 
 onMounted(() => {
   authStore.checkAuth()
@@ -33,10 +35,13 @@ function handleUploaded() {
 
   <!-- Стандартный макет приложения с навигацией и сайдбаром -->
   <div v-else class="min-h-screen flex flex-col bg-bg-primary text-fg-primary">
-    <Navbar @open-upload="showUploadModal = true" />
+    <Navbar
+      @open-upload="showUploadModal = true"
+      @open-connect="showConnectModal = true"
+    />
 
     <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-6">
-      <Sidebar />
+      <Sidebar @open-connect="showConnectModal = true" />
       <main class="flex-1 min-w-0">
         <router-view />
       </main>
@@ -47,6 +52,12 @@ function handleUploaded() {
       v-if="showUploadModal"
       @close="showUploadModal = false"
       @uploaded="handleUploaded"
+    />
+
+    <!-- Модальное окно подключения ридеров и приложений (OPDS/API) -->
+    <ConnectModal
+      v-if="showConnectModal"
+      @close="showConnectModal = false"
     />
   </div>
 </template>

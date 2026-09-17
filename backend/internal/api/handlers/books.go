@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"boyan/internal/config"
+	"boyan/internal/models"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
 
@@ -31,7 +32,7 @@ func NewBooksHandler(cfg *config.Config, repo *storage.BookRepository, coverCach
 	}
 }
 
-// ListBooks возвращает список книг с поддержкой поиска и пагинации.
+// ListBooks возвращает список книг с поддержкой поиска, сортировки и пагинации.
 func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
@@ -45,8 +46,12 @@ func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * perPage
 	query := r.URL.Query().Get("q")
+	sort := r.URL.Query().Get("sort")
+	if sort == "" {
+		sort = "recent"
+	}
 
-	books, total, err := h.repo.SearchBooksFTS(r.Context(), query, offset, perPage)
+	books, total, err := h.repo.SearchBooksFTSSorted(r.Context(), query, offset, perPage, sort)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "SEARCH_FAILED")
 		return
@@ -60,6 +65,208 @@ func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 		"page":        page,
 		"per_page":    perPage,
 		"total_pages": totalPages,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// ListAuthors возвращает список авторов с пагинацией, фильтром по букве и поиском.
+func (h *BooksHandler) ListAuthors(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if perPage < 1 || perPage > 100 {
+		perPage = 50
+	}
+
+	offset := (page - 1) * perPage
+	letter := r.URL.Query().Get("letter")
+	query := r.URL.Query().Get("q")
+
+	authors, total, err := h.repo.ListAuthors(r.Context(), letter, query, offset, perPage)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+
+	letters, _ := h.repo.GetAuthorsAlphabet(r.Context())
+	if letters == nil {
+		letters = []storage.LetterCount{}
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
+
+	response := map[string]any{
+		"items":       authors,
+		"letters":     letters,
+		"total":       total,
+		"page":        page,
+		"per_page":    perPage,
+		"total_pages": totalPages,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// GetAuthor возвращает информацию об авторе.
+func (h *BooksHandler) GetAuthor(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "AUTHOR_ID_REQUIRED")
+		return
+	}
+
+	author, err := h.repo.GetAuthorByID(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if author == nil {
+		writeAPIError(w, r, http.StatusNotFound, "AUTHOR_NOT_FOUND")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(author)
+}
+
+// GetAuthorBooks возвращает список книг автора.
+func (h *BooksHandler) GetAuthorBooks(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "AUTHOR_ID_REQUIRED")
+		return
+	}
+
+	author, err := h.repo.GetAuthorByID(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if author == nil {
+		writeAPIError(w, r, http.StatusNotFound, "AUTHOR_NOT_FOUND")
+		return
+	}
+
+	books, err := h.repo.GetAuthorBooks(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if books == nil {
+		books = []models.Book{}
+	}
+
+	response := map[string]any{
+		"author": author,
+		"items":  books,
+		"total":  len(books),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// ListSeries возвращает список книжных серий.
+func (h *BooksHandler) ListSeries(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if perPage < 1 || perPage > 100 {
+		perPage = 50
+	}
+
+	offset := (page - 1) * perPage
+	letter := r.URL.Query().Get("letter")
+	query := r.URL.Query().Get("q")
+
+	series, total, err := h.repo.ListSeries(r.Context(), letter, query, offset, perPage)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+
+	letters, _ := h.repo.GetSeriesAlphabet(r.Context())
+	if letters == nil {
+		letters = []storage.LetterCount{}
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
+
+	response := map[string]any{
+		"items":       series,
+		"letters":     letters,
+		"total":       total,
+		"page":        page,
+		"per_page":    perPage,
+		"total_pages": totalPages,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// GetSeries возвращает информацию о серии.
+func (h *BooksHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "SERIES_ID_REQUIRED")
+		return
+	}
+
+	series, err := h.repo.GetSeriesByID(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if series == nil {
+		writeAPIError(w, r, http.StatusNotFound, "SERIES_NOT_FOUND")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(series)
+}
+
+// GetSeriesBooks возвращает книги серии.
+func (h *BooksHandler) GetSeriesBooks(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "SERIES_ID_REQUIRED")
+		return
+	}
+
+	series, err := h.repo.GetSeriesByID(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if series == nil {
+		writeAPIError(w, r, http.StatusNotFound, "SERIES_NOT_FOUND")
+		return
+	}
+
+	books, err := h.repo.GetSeriesBooks(r.Context(), id)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR")
+		return
+	}
+	if books == nil {
+		books = []models.Book{}
+	}
+
+	response := map[string]any{
+		"series": series,
+		"items":  books,
+		"total":  len(books),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

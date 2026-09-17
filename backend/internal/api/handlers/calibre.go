@@ -1,19 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"boyan/internal/importer/calibre"
+	"boyan/internal/services"
 )
 
 type CalibreHandler struct {
-	importer *calibre.Importer
+	importer    *calibre.Importer
+	taskManager *services.TaskManager
 }
 
-func NewCalibreHandler(importer *calibre.Importer) *CalibreHandler {
-	return &CalibreHandler{importer: importer}
+func NewCalibreHandler(importer *calibre.Importer, taskManager *services.TaskManager) *CalibreHandler {
+	return &CalibreHandler{
+		importer:    importer,
+		taskManager: taskManager,
+	}
 }
 
 type ImportCalibreRequest struct {
@@ -23,13 +30,13 @@ type ImportCalibreRequest struct {
 
 // ImportCalibre выполняет импорт библиотеки Calibre из переданного пути.
 // @Summary Импорт библиотеки Calibre
-// @Description Сканирует и импортирует каталог Calibre по указанному пути
+// @Description Запускает фоновую задачу импорта каталога Calibre по указанному пути
 // @Tags Admin
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body ImportCalibreRequest true "Параметры импорта библиотеки Calibre"
-// @Success 200 {object} calibre.ImportStats
+// @Success 202 {object} services.Task
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
@@ -48,13 +55,37 @@ func (h *CalibreHandler) ImportCalibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.importer.ImportLibrary(r.Context(), req.Path, calibre.ImportOptions{
-		CopyFiles: req.CopyFiles,
-	})
+	// Предварительная проверка доступности базы metadata.db перед запуском фоновой задачи
+	reader, err := calibre.Open(req.Path)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	_ = reader.Close()
 
-	writeJSON(w, http.StatusOK, stats)
+	// Регистрация и запуск задачи в TaskManager
+	task, taskCtx := h.taskManager.CreateTask(context.Background(), "import_calibre", 0)
+	h.taskManager.StartTask(task.ID)
+
+	go func(taskID, p string, opts calibre.ImportOptions, ctx context.Context) {
+		stats, err := h.importer.ImportLibraryWithProgress(ctx, p, opts, func(processed, total int, currentItem string, err error) {
+			h.taskManager.UpdateProgress(taskID, processed, total, currentItem)
+			if err != nil {
+				h.taskManager.AddError(taskID, fmt.Sprintf("%s: %v", currentItem, err))
+			}
+		})
+
+		if err != nil {
+			if ctx.Err() != nil {
+				// Задача отменена пользователем
+				return
+			}
+			h.taskManager.FailTask(taskID, err)
+		} else {
+			h.taskManager.CompleteTask(taskID, fmt.Sprintf("Imported %d of %d books (%d skipped, %d format files attached)",
+				stats.ImportedBooks, stats.TotalCalibreBooks, stats.Skipped, stats.FormatsAttached))
+		}
+	}(task.ID, req.Path, calibre.ImportOptions{CopyFiles: req.CopyFiles}, taskCtx)
+
+	writeJSON(w, http.StatusAccepted, task)
 }

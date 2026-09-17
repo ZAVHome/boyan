@@ -107,3 +107,46 @@ export interface ProcessResult {
   library_file?: string
   sha256?: string
 }
+
+export interface LetterCount {
+  letter: string
+  count: number
+}
+
+export interface AuthorWithCount extends Author {
+  book_count: number
+}
+
+export interface AuthorsListResponse {
+  items: AuthorWithCount[]
+  letters: LetterCount[]
+  total: number
+  page: number
+  per_page: number
+  total_pages: number
+}
+
+export interface AuthorBooksResponse {
+  author: Author
+  items: Book[]
+  total: number
+}
+
+export interface SeriesWithCount extends Series {
+  book_count: number
+}
+
+export interface SeriesListResponse {
+  items: SeriesWithCount[]
+  letters: LetterCount[]
+  total: number
+  page: number
+  per_page: number
+  total_pages: number
+}
+
+export interface SeriesBooksResponse {
+  series: Series
+  items: Book[]
+  total: number
+}

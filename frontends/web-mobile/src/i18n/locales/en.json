@@ -108,6 +108,10 @@
     "disconnected": "Offline Mode",
     "offline_cache_size": "Offline Storage",
     "clear_cache": "Clear Cache",
+    "protocols_title": "Network Protocols (OPDS)",
+    "protocols_desc": "Connection addresses for external e-readers and apps:",
+    "copy": "Copy",
+    "copied": "Copied!",
     "about": "About",
     "version": "Version"
   },

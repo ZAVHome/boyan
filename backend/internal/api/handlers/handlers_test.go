@@ -235,3 +235,96 @@ func TestAPI_I18nErrorResponses(t *testing.T) {
 		t.Errorf("expected RU AUTH_FIELDS_REQUIRED, got: %+v", errRespRU)
 	}
 }
+
+func TestAuthorsAndSeriesEndpoints(t *testing.T) {
+	ctx := context.Background()
+	tmpDir, err := os.MkdirTemp("", "api_authors_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	pool, err := storage.NewSQLitePool(ctx, dbPath, 5000, 16000)
+	if err != nil {
+		t.Fatalf("failed to create pool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := storage.RunMigrations(ctx, pool.Writer); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	bookRepo := storage.NewBookRepository(pool)
+	userRepo := storage.NewUserRepository(pool)
+	quarantineRepo := storage.NewQuarantineRepository(pool)
+	progressRepo := storage.NewProgressRepository(pool)
+	coverCache, err := cover.NewCoverCache(filepath.Join(tmpDir, "covers"), 100)
+	if err != nil {
+		t.Fatalf("failed to create cover cache: %v", err)
+	}
+
+	// Добавляем тестовую книгу с автором и серией
+	author1 := models.AuthorDetail{
+		Author: models.Author{Name: "Александр Пушкин", SortName: "Пушкин, Александр"},
+		Role:   "author",
+	}
+	series1 := models.SeriesDetail{
+		Series: models.Series{Name: "Классика", SortName: "Классика"},
+		Index:  1,
+	}
+	book1 := &models.Book{
+		ID:    "book-pushkin-1",
+		Title: "Евгений Онегин",
+	}
+	_ = bookRepo.SaveBook(ctx, book1, []models.AuthorDetail{author1}, []models.SeriesDetail{series1}, nil, nil)
+
+	cfg := config.DefaultConfig()
+	watcherInstance := watcher.NewWatcher(cfg, bookRepo, quarantineRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
+
+	// 1. GET /api/v1/authors
+	reqAuthors := httptest.NewRequest(http.MethodGet, "/api/v1/authors", nil)
+	recAuthors := httptest.NewRecorder()
+	router.ServeHTTP(recAuthors, reqAuthors)
+	if recAuthors.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/v1/authors, got %d", recAuthors.Code)
+	}
+	var authorsResp struct {
+		Items []struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			BookCount int    `json:"book_count"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	_ = json.Unmarshal(recAuthors.Body.Bytes(), &authorsResp)
+	if authorsResp.Total != 1 || len(authorsResp.Items) != 1 {
+		t.Fatalf("expected 1 author, got total=%d items=%d", authorsResp.Total, len(authorsResp.Items))
+	}
+	authorID := authorsResp.Items[0].ID
+
+	// 2. GET /api/v1/authors/{id}/books
+	reqAuthorBooks := httptest.NewRequest(http.MethodGet, "/api/v1/authors/"+authorID+"/books", nil)
+	recAuthorBooks := httptest.NewRecorder()
+	router.ServeHTTP(recAuthorBooks, reqAuthorBooks)
+	if recAuthorBooks.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/v1/authors/{id}/books, got %d", recAuthorBooks.Code)
+	}
+
+	// 3. GET /api/v1/series
+	reqSeries := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	recSeries := httptest.NewRecorder()
+	router.ServeHTTP(recSeries, reqSeries)
+	if recSeries.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/v1/series, got %d", recSeries.Code)
+	}
+
+	// 4. GET /api/v1/books?sort=title
+	reqBooksSort := httptest.NewRequest(http.MethodGet, "/api/v1/books?sort=title", nil)
+	recBooksSort := httptest.NewRecorder()
+	router.ServeHTTP(recBooksSort, reqBooksSort)
+	if recBooksSort.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/v1/books?sort=title, got %d", recBooksSort.Code)
+	}
+}

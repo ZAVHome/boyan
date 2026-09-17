@@ -21,6 +21,9 @@ type Reader struct {
 func Open(calibreDir string) (*Reader, error) {
 	dbPath := filepath.Join(calibreDir, "metadata.db")
 	if _, err := os.Stat(dbPath); err != nil {
+		if os.IsPermission(err) {
+			return nil, fmt.Errorf("permission denied reading Calibre database at %s (check file permissions and parent directory traverse rights): %w", dbPath, err)
+		}
 		return nil, fmt.Errorf("calibre database not found at %s: %w", dbPath, err)
 	}
 

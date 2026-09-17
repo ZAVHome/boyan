@@ -149,7 +149,41 @@ func TestStorage_FullFlow(t *testing.T) {
 		t.Errorf("expected 1 result for 'Мир', got %d", total)
 	}
 
-	// 7. Проверка параллельного чтения в WAL-режиме
+	// 7. Проверка авторов и серий
+	authorsList, aTotal, err := bookRepo.ListAuthors(ctx, "", "", 0, 10)
+	if err != nil {
+		t.Fatalf("ListAuthors failed: %v", err)
+	}
+	if aTotal < 2 || len(authorsList) < 2 {
+		t.Errorf("expected at least 2 authors, got total=%d, len=%d", aTotal, len(authorsList))
+	}
+
+	authorsAlphabet, err := bookRepo.GetAuthorsAlphabet(ctx)
+	if err != nil {
+		t.Fatalf("GetAuthorsAlphabet failed: %v", err)
+	}
+	if len(authorsAlphabet) == 0 {
+		t.Errorf("expected non-empty authors alphabet")
+	}
+
+	seriesList, sTotal, err := bookRepo.ListSeries(ctx, "", "", 0, 10)
+	if err != nil {
+		t.Fatalf("ListSeries failed: %v", err)
+	}
+	if sTotal != 1 || len(seriesList) != 1 {
+		t.Errorf("expected 1 series, got total=%d", sTotal)
+	}
+
+	// 8. Проверка сортировки книг
+	booksSortedByTitle, _, err := bookRepo.ListBooksSorted(ctx, 0, 10, "title")
+	if err != nil {
+		t.Fatalf("ListBooksSorted by title failed: %v", err)
+	}
+	if len(booksSortedByTitle) != 2 {
+		t.Errorf("expected 2 books, got %d", len(booksSortedByTitle))
+	}
+
+	// 9. Проверка параллельного чтения в WAL-режиме
 	done := make(chan bool)
 	for i := 0; i < 5; i++ {
 		go func() {

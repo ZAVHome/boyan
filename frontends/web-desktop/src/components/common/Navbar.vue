@@ -4,12 +4,13 @@ import { useCatalogStore } from '@/stores/catalog'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Search, Plus, BookOpen, LogOut, User as UserIcon, X, ShieldCheck } from 'lucide-vue-next'
+import { Search, Plus, BookOpen, LogOut, User as UserIcon, X, ShieldCheck, Rss } from 'lucide-vue-next'
 import ThemeToggle from './ThemeToggle.vue'
 import LanguageSelector from './LanguageSelector.vue'
 
 const emit = defineEmits<{
   (e: 'openUpload'): void
+  (e: 'openConnect'): void
 }>()
 
 const { t } = useI18n()
@@ -105,6 +106,15 @@ function handleAuthAction() {
           <ShieldCheck class="w-4 h-4" />
           <span>{{ t('app.admin_panel_btn') }}</span>
         </router-link>
+
+        <!-- Кнопка подключения читалок (OPDS) -->
+        <button
+          @click="emit('openConnect')"
+          class="p-2 rounded-xl bg-bg-surface border border-border hover:bg-bg-hover text-fg-secondary hover:text-accent transition-colors relative"
+          :title="t('connect.title')"
+        >
+          <Rss class="w-4 h-4 text-accent" />
+        </button>
 
         <!-- Переключатели темы и языка -->
         <ThemeToggle />

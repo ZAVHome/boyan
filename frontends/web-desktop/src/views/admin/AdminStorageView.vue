@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { adminApi, type AdminTask } from '@/api/admin'
 import { api } from '@/api/client'
 import { useI18n } from 'vue-i18n'
@@ -14,7 +14,10 @@ import {
   Clock,
   FileArchive,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  AlertTriangle,
+  Copy,
+  Check
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -29,6 +32,45 @@ const calibrePath = ref('')
 const calibreCopyFiles = ref(true)
 const isImportingCalibre = ref(false)
 const calibreResult = ref<string | null>(null)
+const isCalibreError = ref(false)
+const isCalibrePermissionError = ref(false)
+const lastCalibrePath = ref('')
+const copiedCmd = ref<string | null>(null)
+
+const parentDir = computed(() => {
+  const p = (lastCalibrePath.value || calibrePath.value || '/path/to/calibre').trim().replace(/[\/\\]$/, '')
+  const idx = p.lastIndexOf('/')
+  return idx > 0 ? p.substring(0, idx) : p
+})
+
+const suggestedGroup = computed(() => {
+  const match = (lastCalibrePath.value || calibrePath.value).match(/\/home\/([^/]+)/)
+  return match ? match[1] : 'calibre'
+})
+
+const cmdGroup = computed(() => {
+  const target = lastCalibrePath.value || calibrePath.value || '/path/to/calibre'
+  return `sudo usermod -aG ${suggestedGroup.value} boyan && sudo chmod g+x ${parentDir.value} && sudo chmod -R g+rX ${target} && sudo systemctl restart boyan`
+})
+
+const cmdSystemd = computed(() => {
+  return `sudo sed -i 's/^ProtectHome=true/ProtectHome=read-only/' /etc/systemd/system/boyan.service && sudo systemctl daemon-reload && sudo systemctl restart boyan`
+})
+
+const cmdAcl = computed(() => {
+  const target = lastCalibrePath.value || calibrePath.value || '/path/to/calibre'
+  return `sudo setfacl -m u:boyan:x ${parentDir.value} && sudo setfacl -R -m u:boyan:rX ${target} && sudo setfacl -R -d -m u:boyan:rX ${target}`
+})
+
+function copyCmd(cmd: string) {
+  navigator.clipboard.writeText(cmd)
+  copiedCmd.value = cmd
+  setTimeout(() => {
+    if (copiedCmd.value === cmd) {
+      copiedCmd.value = null
+    }
+  }, 2000)
+}
 
 let timer: any = null
 
@@ -85,21 +127,35 @@ async function handleCancelTask(id: string) {
   }
 }
 
+function getTaskTypeName(type: string) {
+  if (type === 'import_calibre') return t('admin.storage.task_type_import_calibre')
+  if (type === 'scan_library') return t('admin.storage.task_type_scan_library')
+  return type
+}
+
 async function handleCalibreImport() {
   if (!calibrePath.value.trim()) return
   isImportingCalibre.value = true
   calibreResult.value = null
+  isCalibreError.value = false
+  isCalibrePermissionError.value = false
+  const targetPath = calibrePath.value.trim()
+  lastCalibrePath.value = targetPath
   try {
     const res = await api.post<any>('/api/v1/admin/import/calibre', {
-      path: calibrePath.value.trim(),
+      path: targetPath,
       copy_files: calibreCopyFiles.value
     })
-    calibreResult.value = t('admin.storage.calibre_imported', {
-      imported: res.imported,
-      total: res.total
-    })
+    calibreResult.value = t('admin.storage.calibre_task_started')
+    await fetchTasks()
   } catch (err: any) {
-    calibreResult.value = 'Error: ' + (err.message || 'Calibre import failed')
+    isCalibreError.value = true
+    const msg = err.message || 'Calibre import failed'
+    calibreResult.value = msg
+    const lower = msg.toLowerCase()
+    if (lower.includes('permission denied') || lower.includes('eacces') || lower.includes('access denied')) {
+      isCalibrePermissionError.value = true
+    }
   } finally {
     isImportingCalibre.value = false
   }
@@ -225,8 +281,97 @@ async function handleCalibreImport() {
         </button>
       </div>
 
-      <div v-if="calibreResult" class="mt-3 p-3 rounded-xl bg-bg-primary border border-border text-xs font-mono">
-        {{ calibreResult }}
+      <p class="text-[11px] text-fg-muted mt-2">
+        {{ t('admin.storage.calibre_path_hint') }}
+      </p>
+
+      <!-- Результат / Ошибка импорта Calibre -->
+      <div v-if="calibreResult" class="mt-4 space-y-3">
+        <!-- Блок сообщения -->
+        <div
+          class="p-3.5 rounded-xl border text-xs flex items-start gap-2.5"
+          :class="isCalibreError ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'"
+        >
+          <AlertTriangle v-if="isCalibreError" class="w-4 h-4 shrink-0 mt-0.5" />
+          <CheckCircle2 v-else class="w-4 h-4 shrink-0 mt-0.5" />
+          <div class="font-mono break-all leading-relaxed">{{ calibreResult }}</div>
+        </div>
+
+        <!-- Подробная подсказка и команды при ошибке прав доступа -->
+        <div
+          v-if="isCalibrePermissionError"
+          class="p-4 rounded-xl bg-bg-primary border border-amber-500/30 space-y-3 text-xs"
+        >
+          <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold">
+            <AlertTriangle class="w-4 h-4 shrink-0" />
+            <span>{{ t('admin.storage.calibre_perm_alert_title') }}</span>
+          </div>
+          <p class="text-fg-secondary leading-relaxed">
+            {{ t('admin.storage.calibre_perm_alert_desc') }}
+          </p>
+
+          <div class="font-medium text-fg-primary pt-1">
+            {{ t('admin.storage.calibre_perm_solution_title') }}
+          </div>
+
+          <!-- Причина 0: Systemd ProtectHome -->
+          <div class="space-y-1.5">
+            <div class="text-amber-600 dark:text-amber-400 font-medium">{{ t('admin.storage.calibre_perm_opt_systemd_title') }}</div>
+            <p class="text-fg-muted text-[11px]">{{ t('admin.storage.calibre_perm_opt_systemd_desc') }}</p>
+            <div class="relative flex items-center bg-bg-surface border border-border rounded-lg p-2.5 font-mono text-[11px] text-fg-primary overflow-x-auto">
+              <span class="pr-8 select-all">{{ cmdSystemd }}</span>
+              <button
+                @click="copyCmd(cmdSystemd)"
+                type="button"
+                class="absolute right-2 top-2 p-1 rounded bg-bg-hover text-fg-muted hover:text-fg-primary transition-colors"
+                :title="t('admin.storage.calibre_perm_copied')"
+              >
+                <Check v-if="copiedCmd === cmdSystemd" class="w-3.5 h-3.5 text-emerald-500" />
+                <Copy v-else class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Вариант 1: Группа -->
+          <div class="space-y-1.5">
+            <div class="text-fg-secondary font-medium">{{ t('admin.storage.calibre_perm_opt1_title') }}</div>
+            <div class="relative flex items-center bg-bg-surface border border-border rounded-lg p-2.5 font-mono text-[11px] text-fg-primary overflow-x-auto">
+              <span class="pr-8 select-all">{{ cmdGroup }}</span>
+              <button
+                @click="copyCmd(cmdGroup)"
+                type="button"
+                class="absolute right-2 top-2 p-1 rounded bg-bg-hover text-fg-muted hover:text-fg-primary transition-colors"
+                :title="t('admin.storage.calibre_perm_copied')"
+              >
+                <Check v-if="copiedCmd === cmdGroup" class="w-3.5 h-3.5 text-emerald-500" />
+                <Copy v-else class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Вариант 2: ACL -->
+          <div class="space-y-1.5">
+            <div class="text-fg-secondary font-medium">{{ t('admin.storage.calibre_perm_opt2_title') }}</div>
+            <div class="relative flex items-center bg-bg-surface border border-border rounded-lg p-2.5 font-mono text-[11px] text-fg-primary overflow-x-auto">
+              <span class="pr-8 select-all">{{ cmdAcl }}</span>
+              <button
+                @click="copyCmd(cmdAcl)"
+                type="button"
+                class="absolute right-2 top-2 p-1 rounded bg-bg-hover text-fg-muted hover:text-fg-primary transition-colors"
+                :title="t('admin.storage.calibre_perm_copied')"
+              >
+                <Check v-if="copiedCmd === cmdAcl" class="w-3.5 h-3.5 text-emerald-500" />
+                <Copy v-else class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Вариант 3: Docker -->
+          <div class="space-y-1 text-fg-secondary">
+            <div class="font-medium text-fg-primary">{{ t('admin.storage.calibre_perm_opt3_title') }}</div>
+            <p class="text-fg-muted text-[11px]">{{ t('admin.storage.calibre_perm_opt3_desc') }}</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -255,8 +400,8 @@ async function handleCalibreImport() {
               <XCircle v-else-if="tItem.status === 'failed' || tItem.status === 'cancelled'" class="w-4 h-4 text-red-500" />
               <Clock v-else class="w-4 h-4 text-fg-muted" />
 
-              <span class="font-bold text-sm text-fg-primary uppercase tracking-wider">
-                {{ tItem.type }}
+              <span class="font-bold text-sm text-fg-primary tracking-wide">
+                {{ getTaskTypeName(tItem.type) }}
               </span>
 
               <span

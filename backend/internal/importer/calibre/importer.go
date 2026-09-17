@@ -48,8 +48,21 @@ func NewImporter(cfg *config.Config, bookRepo *storage.BookRepository, coverCach
 	}
 }
 
+// ProgressFunc вызывается при обработке каждой книги из каталога Calibre.
+type ProgressFunc func(processed, total int, currentItem string, err error)
+
 // ImportLibrary выполняет импорт каталога Calibre в хранилище Бояна.
 func (imp *Importer) ImportLibrary(ctx context.Context, calibreDir string, opts ImportOptions) (*ImportStats, error) {
+	return imp.ImportLibraryWithProgress(ctx, calibreDir, opts, nil)
+}
+
+// ImportLibraryWithProgress выполняет импорт каталога Calibre с вызовом функции уведомления о прогрессе.
+func (imp *Importer) ImportLibraryWithProgress(
+	ctx context.Context,
+	calibreDir string,
+	opts ImportOptions,
+	onProgress ProgressFunc,
+) (*ImportStats, error) {
 	reader, err := Open(calibreDir)
 	if err != nil {
 		return nil, fmt.Errorf("open calibre library: %w", err)
@@ -66,17 +79,24 @@ func (imp *Importer) ImportLibrary(ctx context.Context, calibreDir string, opts 
 		Errors:            make([]string, 0),
 	}
 
-	for _, cBook := range calibreBooks {
+	total := len(calibreBooks)
+	for idx, cBook := range calibreBooks {
 		select {
 		case <-ctx.Done():
 			return stats, ctx.Err()
 		default:
 		}
 
+		var bookErr error
 		if err := imp.importSingleBook(ctx, reader, calibreDir, cBook, opts, stats); err != nil {
+			bookErr = err
 			msg := fmt.Sprintf("book '%s' (ID %d): %v", cBook.Title, cBook.ID, err)
 			slog.Warn("Failed to import calibre book", "book_id", cBook.ID, "title", cBook.Title, "error", err)
 			stats.Errors = append(stats.Errors, msg)
+		}
+
+		if onProgress != nil {
+			onProgress(idx+1, total, cBook.Title, bookErr)
 		}
 	}
 

@@ -61,7 +61,7 @@ func NewRouter(
 	uploadH := handlers.NewUploadHandler(watcherInstance)
 	quarantineH := handlers.NewQuarantineHandler(cfg, quarantineRepo, bookRepo, coverCache)
 	progressH := handlers.NewProgressHandler(progressRepo, bookRepo)
-	calibreH := handlers.NewCalibreHandler(calibreImporter)
+	calibreH := handlers.NewCalibreHandler(calibreImporter, taskManager)
 
 	// Хендлеры расширенной панели администратора
 	adminDashboardH := handlers.NewAdminDashboardHandler(cfg, pool, bookRepo)
@@ -97,6 +97,16 @@ func NewRouter(
 		r.Get("/books", booksH.ListBooks)
 		r.Get("/books/{id}", booksH.GetBook)
 		r.Get("/covers/{id}", booksH.GetCover)
+
+		// Авторы
+		r.Get("/authors", booksH.ListAuthors)
+		r.Get("/authors/{id}", booksH.GetAuthor)
+		r.Get("/authors/{id}/books", booksH.GetAuthorBooks)
+
+		// Серии
+		r.Get("/series", booksH.ListSeries)
+		r.Get("/series/{id}", booksH.GetSeries)
+		r.Get("/series/{id}/books", booksH.GetSeriesBooks)
 
 		// Стриминг и скачивание файлов книг
 		r.Get("/books/{id}/download/{format}", func(w http.ResponseWriter, r *http.Request) {

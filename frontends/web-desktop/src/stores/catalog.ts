@@ -13,6 +13,7 @@ export const useCatalogStore = defineStore('catalog', () => {
   const searchQuery = ref('')
   const selectedBook = ref<Book | null>(null)
   const viewMode = ref<'grid' | 'list'>('grid')
+  const sortBy = ref<'recent' | 'title' | 'author'>('recent')
 
   async function fetchBooks(resetPage = false) {
     if (resetPage) {
@@ -22,6 +23,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     try {
       const res = await api.get<BookListResponse>('/api/v1/books', {
         q: searchQuery.value,
+        sort: sortBy.value,
         page: page.value,
         per_page: perPage.value
       })
@@ -48,6 +50,11 @@ export const useCatalogStore = defineStore('catalog', () => {
     fetchBooks(true)
   }
 
+  function setSort(sort: 'recent' | 'title' | 'author') {
+    sortBy.value = sort
+    fetchBooks(true)
+  }
+
   async function openBookDetail(bookId: string) {
     try {
       const b = await api.get<Book>(`/api/v1/books/${bookId}`)
@@ -71,9 +78,11 @@ export const useCatalogStore = defineStore('catalog', () => {
     searchQuery,
     selectedBook,
     viewMode,
+    sortBy,
     fetchBooks,
     setPage,
     setSearch,
+    setSort,
     openBookDetail,
     closeBookDetail
   }

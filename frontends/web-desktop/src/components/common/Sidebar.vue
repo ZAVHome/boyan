@@ -10,8 +10,14 @@ import {
   CheckCircle2,
   Bookmark,
   ShieldAlert,
-  Compass
+  Compass,
+  Rss,
+  ChevronRight
 } from 'lucide-vue-next'
+
+const emit = defineEmits<{
+  (e: 'openConnect'): void
+}>()
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -79,6 +85,29 @@ const shelfNav = [
           <ShieldAlert class="w-4 h-4 text-amber-500" />
           <span>{{ t('nav.quarantine') }}</span>
         </router-link>
+      </div>
+
+      <!-- Подключение внешних читалок и приложений (OPDS) -->
+      <div class="pt-4 border-t border-border">
+        <button
+          @click="emit('openConnect')"
+          class="w-full flex items-center justify-between p-3 rounded-xl bg-bg-surface hover:bg-bg-hover border border-border text-left transition-all group shadow-xs hover:border-accent/40"
+        >
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="p-1.5 rounded-lg bg-accent/10 text-accent group-hover:bg-accent group-hover:text-white transition-colors shrink-0">
+              <Rss class="w-4 h-4" />
+            </div>
+            <div class="min-w-0">
+              <span class="text-xs font-semibold text-fg-primary block leading-tight truncate">
+                {{ t('connect.title') }}
+              </span>
+              <span class="text-[10px] text-fg-muted block truncate mt-0.5">
+                {{ t('connect.subtitle_short') }}
+              </span>
+            </div>
+          </div>
+          <ChevronRight class="w-3.5 h-3.5 text-fg-muted group-hover:text-fg-primary transition-colors shrink-0" />
+        </button>
       </div>
     </div>
   </aside>

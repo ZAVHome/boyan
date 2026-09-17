@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Loader2,
   BookX,
-  BookOpen
+  BookOpen,
+  ArrowUpDown
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -38,8 +39,8 @@ function onBookRead(book: Book) {
 
 <template>
   <div class="space-y-6">
-    <!-- Верхняя панель витрины: общее количество и переключатель вида -->
-    <div class="flex items-center justify-between gap-4 pb-2 border-b border-border">
+    <!-- Верхняя панель витрины: общее количество, сортировка и переключатель вида -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
       <div>
         <h1 class="text-xl font-bold text-fg-primary tracking-tight">
           {{ catalogStore.searchQuery ? `Поиск: "${catalogStore.searchQuery}"` : t('nav.catalog') }}
@@ -49,24 +50,42 @@ function onBookRead(book: Book) {
         </p>
       </div>
 
-      <!-- Переключатель Grid / List -->
-      <div class="flex items-center gap-1 bg-bg-surface border border-border p-1 rounded-xl">
-        <button
-          @click="catalogStore.viewMode = 'grid'"
-          class="p-1.5 rounded-lg transition-colors"
-          :class="catalogStore.viewMode === 'grid' ? 'bg-accent text-white shadow-sm' : 'text-fg-secondary hover:text-fg-primary'"
-          :title="t('catalog.view_grid')"
-        >
-          <LayoutGrid class="w-4 h-4" />
-        </button>
-        <button
-          @click="catalogStore.viewMode = 'list'"
-          class="p-1.5 rounded-lg transition-colors"
-          :class="catalogStore.viewMode === 'list' ? 'bg-accent text-white shadow-sm' : 'text-fg-secondary hover:text-fg-primary'"
-          :title="t('catalog.view_list')"
-        >
-          <ListIcon class="w-4 h-4" />
-        </button>
+      <!-- Элементы управления: сортировка и вид -->
+      <div class="flex items-center gap-2.5 self-end sm:self-auto">
+        <!-- Сортировка -->
+        <div class="flex items-center gap-1.5 bg-bg-surface border border-border px-2.5 py-1.5 rounded-xl shadow-xs">
+          <ArrowUpDown class="w-3.5 h-3.5 text-fg-muted shrink-0" />
+          <span class="text-xs text-fg-muted hidden md:inline">{{ t('catalog.sort_by') }}:</span>
+          <select
+            v-model="catalogStore.sortBy"
+            @change="catalogStore.fetchBooks(true)"
+            class="bg-transparent text-xs font-medium text-fg-primary focus:outline-none cursor-pointer pr-1"
+          >
+            <option value="recent" class="bg-bg-surface text-fg-primary">{{ t('catalog.sort_recent') }}</option>
+            <option value="title" class="bg-bg-surface text-fg-primary">{{ t('catalog.sort_title') }}</option>
+            <option value="author" class="bg-bg-surface text-fg-primary">{{ t('catalog.sort_author') }}</option>
+          </select>
+        </div>
+
+        <!-- Переключатель Grid / List -->
+        <div class="flex items-center gap-1 bg-bg-surface border border-border p-1 rounded-xl">
+          <button
+            @click="catalogStore.viewMode = 'grid'"
+            class="p-1.5 rounded-lg transition-colors"
+            :class="catalogStore.viewMode === 'grid' ? 'bg-accent text-white shadow-sm' : 'text-fg-secondary hover:text-fg-primary'"
+            :title="t('catalog.view_grid')"
+          >
+            <LayoutGrid class="w-4 h-4" />
+          </button>
+          <button
+            @click="catalogStore.viewMode = 'list'"
+            class="p-1.5 rounded-lg transition-colors"
+            :class="catalogStore.viewMode === 'list' ? 'bg-accent text-white shadow-sm' : 'text-fg-secondary hover:text-fg-primary'"
+            :title="t('catalog.view_list')"
+          >
+            <ListIcon class="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
 

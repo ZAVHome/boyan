@@ -269,50 +269,48 @@ func (r *BookRepository) GetBookByID(ctx context.Context, id string) (*models.Bo
 
 // ListBooks возвращает список книг с пагинацией и общее количество.
 func (r *BookRepository) ListBooks(ctx context.Context, offset, limit int) ([]models.Book, int, error) {
+	return r.ListBooksSorted(ctx, offset, limit, "recent")
+}
+
+// ListBooksSorted возвращает список книг с пагинацией и заданной сортировкой.
+func (r *BookRepository) ListBooksSorted(ctx context.Context, offset, limit int, sort string) ([]models.Book, int, error) {
 	var total int
 	err := r.pool.Reader.GetContext(ctx, &total, `SELECT COUNT(*) FROM books`)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count books: %w", err)
 	}
 
+	orderClause := "ORDER BY b.created_at DESC"
+	switch sort {
+	case "title":
+		orderClause = "ORDER BY b.title COLLATE NOCASE ASC"
+	case "author":
+		orderClause = "ORDER BY (SELECT a.sort_name FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) COLLATE NOCASE ASC, b.title COLLATE NOCASE ASC"
+	default:
+		orderClause = "ORDER BY b.created_at DESC"
+	}
+
 	var books []models.Book
-	err = r.pool.Reader.SelectContext(ctx, &books, `
-		SELECT * FROM books ORDER BY created_at DESC LIMIT ? OFFSET ?
-	`, limit, offset)
+	query := fmt.Sprintf(`SELECT b.* FROM books b %s LIMIT ? OFFSET ?`, orderClause)
+	err = r.pool.Reader.SelectContext(ctx, &books, query, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list books: %w", err)
 	}
 
-	// Заполняем авторов для каждой книги
-	for i := range books {
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Authors, `
-			SELECT a.id, a.name, a.sort_name, ba.role, ba.author_order
-			FROM authors a
-			JOIN book_authors ba ON a.id = ba.author_id
-			WHERE ba.book_id = ?
-			ORDER BY ba.author_order ASC
-		`, books[i].ID)
-
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Series, `
-			SELECT s.id, s.name, s.sort_name, bs.series_index
-			FROM series s
-			JOIN book_series bs ON s.id = bs.series_id
-			WHERE bs.book_id = ?
-		`, books[i].ID)
-
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Files, `
-			SELECT * FROM book_files WHERE book_id = ?
-		`, books[i].ID)
-	}
-
+	r.enrichBooksWithDetails(ctx, books)
 	return books, total, nil
 }
 
 // SearchBooksFTS выполняет полнотекстовый поиск по индексу FTS5.
 func (r *BookRepository) SearchBooksFTS(ctx context.Context, query string, offset, limit int) ([]models.Book, int, error) {
+	return r.SearchBooksFTSSorted(ctx, query, offset, limit, "recent")
+}
+
+// SearchBooksFTSSorted выполняет полнотекстовый поиск с указанным порядком сортировки.
+func (r *BookRepository) SearchBooksFTSSorted(ctx context.Context, query string, offset, limit int, sort string) ([]models.Book, int, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return r.ListBooks(ctx, offset, limit)
+		return r.ListBooksSorted(ctx, offset, limit, sort)
 	}
 
 	// Подготавливаем слова для префиксного поиска
@@ -342,41 +340,31 @@ func (r *BookRepository) SearchBooksFTS(ctx context.Context, query string, offse
 		return nil, 0, fmt.Errorf("count fts: %w", err)
 	}
 
+	orderClause := "ORDER BY bm25(books_fts)"
+	switch sort {
+	case "title":
+		orderClause = "ORDER BY b.title COLLATE NOCASE ASC"
+	case "author":
+		orderClause = "ORDER BY (SELECT a.sort_name FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) COLLATE NOCASE ASC, b.title COLLATE NOCASE ASC"
+	case "recent":
+		orderClause = "ORDER BY b.created_at DESC"
+	}
+
 	var books []models.Book
-	querySQL := `
+	querySQL := fmt.Sprintf(`
 		SELECT b.*
 		FROM books b
 		JOIN books_fts fts ON b.id = fts.book_id
 		WHERE books_fts MATCH ?
-		ORDER BY bm25(books_fts)
+		%s
 		LIMIT ? OFFSET ?
-	`
+	`, orderClause)
 	err = r.pool.Reader.SelectContext(ctx, &books, querySQL, ftsQuery, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("select fts: %w", err)
 	}
 
-	for i := range books {
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Authors, `
-			SELECT a.id, a.name, a.sort_name, ba.role, ba.author_order
-			FROM authors a
-			JOIN book_authors ba ON a.id = ba.author_id
-			WHERE ba.book_id = ?
-			ORDER BY ba.author_order ASC
-		`, books[i].ID)
-
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Series, `
-			SELECT s.id, s.name, s.sort_name, bs.series_index
-			FROM series s
-			JOIN book_series bs ON s.id = bs.series_id
-			WHERE bs.book_id = ?
-		`, books[i].ID)
-
-		_ = r.pool.Reader.SelectContext(ctx, &books[i].Files, `
-			SELECT * FROM book_files WHERE book_id = ?
-		`, books[i].ID)
-	}
-
+	r.enrichBooksWithDetails(ctx, books)
 	return books, total, nil
 }
 
@@ -423,36 +411,68 @@ type GenreWithCount struct {
 func (r *BookRepository) GetAuthorsAlphabet(ctx context.Context) ([]LetterCount, error) {
 	var list []LetterCount
 	err := r.pool.Reader.SelectContext(ctx, &list, `
-		SELECT UPPER(SUBSTR(sort_name, 1, 1)) AS letter, COUNT(*) AS count
+		SELECT UPPER(SUBSTR(COALESCE(NULLIF(sort_name, ''), name), 1, 1)) AS letter, COUNT(*) AS count
 		FROM authors
+		WHERE (sort_name IS NOT NULL AND sort_name != '') OR (name IS NOT NULL AND name != '')
 		GROUP BY letter
 		ORDER BY letter ASC
 	`)
 	return list, err
 }
 
-// GetAuthorsByLetter возвращает список авторов на заданную букву.
-func (r *BookRepository) GetAuthorsByLetter(ctx context.Context, letter string, offset, limit int) ([]AuthorWithCount, int, error) {
-	letter = strings.ToUpper(letter)
+// ListAuthors возвращает список авторов с фильтрацией по букве или поисковой строке.
+func (r *BookRepository) ListAuthors(ctx context.Context, letter, query string, offset, limit int) ([]AuthorWithCount, int, error) {
+	letter = strings.TrimSpace(letter)
+	query = strings.TrimSpace(query)
+
+	var whereClauses []string
+	var countArgs []any
+	var selectArgs []any
+
+	if query != "" {
+		whereClauses = append(whereClauses, "(a.name LIKE ? OR a.sort_name LIKE ?)")
+		searchTerm := "%" + query + "%"
+		countArgs = append(countArgs, searchTerm, searchTerm)
+		selectArgs = append(selectArgs, searchTerm, searchTerm)
+	} else if letter != "" {
+		upperLetter := strings.ToUpper(letter)
+		lowerLetter := strings.ToLower(letter)
+		whereClauses = append(whereClauses, "SUBSTR(COALESCE(NULLIF(a.sort_name, ''), a.name), 1, 1) IN (?, ?)")
+		countArgs = append(countArgs, upperLetter, lowerLetter)
+		selectArgs = append(selectArgs, upperLetter, lowerLetter)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM authors a %s`, whereSQL)
 	var total int
-	err := r.pool.Reader.GetContext(ctx, &total, `
-		SELECT COUNT(*) FROM authors WHERE UPPER(SUBSTR(sort_name, 1, 1)) = ?
-	`, letter)
+	err := r.pool.Reader.GetContext(ctx, &total, countSQL, countArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var authors []AuthorWithCount
-	err = r.pool.Reader.SelectContext(ctx, &authors, `
+	selectSQL := fmt.Sprintf(`
 		SELECT a.id, a.name, a.sort_name, COUNT(ba.book_id) AS book_count
 		FROM authors a
 		LEFT JOIN book_authors ba ON a.id = ba.author_id
-		WHERE UPPER(SUBSTR(a.sort_name, 1, 1)) = ?
+		%s
 		GROUP BY a.id, a.name, a.sort_name
-		ORDER BY a.sort_name ASC
+		ORDER BY COALESCE(NULLIF(a.sort_name, ''), a.name) COLLATE NOCASE ASC
 		LIMIT ? OFFSET ?
-	`, letter, limit, offset)
+	`, whereSQL)
+
+	selectArgs = append(selectArgs, limit, offset)
+	var authors []AuthorWithCount
+	err = r.pool.Reader.SelectContext(ctx, &authors, selectSQL, selectArgs...)
 	return authors, total, err
+}
+
+// GetAuthorsByLetter возвращает список авторов на заданную букву.
+func (r *BookRepository) GetAuthorsByLetter(ctx context.Context, letter string, offset, limit int) ([]AuthorWithCount, int, error) {
+	return r.ListAuthors(ctx, letter, "", offset, limit)
 }
 
 // GetAuthorByID возвращает автора по ID.
@@ -489,36 +509,68 @@ func (r *BookRepository) GetAuthorBooks(ctx context.Context, authorID string) ([
 func (r *BookRepository) GetSeriesAlphabet(ctx context.Context) ([]LetterCount, error) {
 	var list []LetterCount
 	err := r.pool.Reader.SelectContext(ctx, &list, `
-		SELECT UPPER(SUBSTR(name, 1, 1)) AS letter, COUNT(*) AS count
+		SELECT UPPER(SUBSTR(COALESCE(NULLIF(name, ''), sort_name), 1, 1)) AS letter, COUNT(*) AS count
 		FROM series
+		WHERE (name IS NOT NULL AND name != '') OR (sort_name IS NOT NULL AND sort_name != '')
 		GROUP BY letter
 		ORDER BY letter ASC
 	`)
 	return list, err
 }
 
-// GetSeriesByLetter возвращает серии на заданную букву.
-func (r *BookRepository) GetSeriesByLetter(ctx context.Context, letter string, offset, limit int) ([]SeriesWithCount, int, error) {
-	letter = strings.ToUpper(letter)
+// ListSeries возвращает список серий с фильтрацией по букве или поисковой строке.
+func (r *BookRepository) ListSeries(ctx context.Context, letter, query string, offset, limit int) ([]SeriesWithCount, int, error) {
+	letter = strings.TrimSpace(letter)
+	query = strings.TrimSpace(query)
+
+	var whereClauses []string
+	var countArgs []any
+	var selectArgs []any
+
+	if query != "" {
+		whereClauses = append(whereClauses, "(s.name LIKE ? OR s.sort_name LIKE ?)")
+		searchTerm := "%" + query + "%"
+		countArgs = append(countArgs, searchTerm, searchTerm)
+		selectArgs = append(selectArgs, searchTerm, searchTerm)
+	} else if letter != "" {
+		upperLetter := strings.ToUpper(letter)
+		lowerLetter := strings.ToLower(letter)
+		whereClauses = append(whereClauses, "SUBSTR(COALESCE(NULLIF(s.name, ''), s.sort_name), 1, 1) IN (?, ?)")
+		countArgs = append(countArgs, upperLetter, lowerLetter)
+		selectArgs = append(selectArgs, upperLetter, lowerLetter)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM series s %s`, whereSQL)
 	var total int
-	err := r.pool.Reader.GetContext(ctx, &total, `
-		SELECT COUNT(*) FROM series WHERE UPPER(SUBSTR(name, 1, 1)) = ?
-	`, letter)
+	err := r.pool.Reader.GetContext(ctx, &total, countSQL, countArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var series []SeriesWithCount
-	err = r.pool.Reader.SelectContext(ctx, &series, `
+	selectSQL := fmt.Sprintf(`
 		SELECT s.id, s.name, s.sort_name, COUNT(bs.book_id) AS book_count
 		FROM series s
 		LEFT JOIN book_series bs ON s.id = bs.series_id
-		WHERE UPPER(SUBSTR(s.name, 1, 1)) = ?
+		%s
 		GROUP BY s.id, s.name, s.sort_name
-		ORDER BY s.name ASC
+		ORDER BY COALESCE(NULLIF(s.name, ''), s.sort_name) COLLATE NOCASE ASC
 		LIMIT ? OFFSET ?
-	`, letter, limit, offset)
+	`, whereSQL)
+
+	selectArgs = append(selectArgs, limit, offset)
+	var series []SeriesWithCount
+	err = r.pool.Reader.SelectContext(ctx, &series, selectSQL, selectArgs...)
 	return series, total, err
+}
+
+// GetSeriesByLetter возвращает серии на заданную букву.
+func (r *BookRepository) GetSeriesByLetter(ctx context.Context, letter string, offset, limit int) ([]SeriesWithCount, int, error) {
+	return r.ListSeries(ctx, letter, "", offset, limit)
 }
 
 // GetSeriesByID возвращает серию по ID.
