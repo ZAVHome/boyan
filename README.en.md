@@ -3,7 +3,7 @@
 </p>
 
 # Boyan
- 
+
 <p align="center">
   <img src="docs/assets/banner.jpg" alt="Boyan" width="100%" />
 </p>

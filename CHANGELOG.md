@@ -10,6 +10,7 @@
 ### Интернационализация бэкенда, деплой на VPS и векторный брендинг
 
 #### Бэкенд (Go Core Engine)
+
 - **Мультиязычность и локализация API (ADR-15):**
   - Реализован централизованный модуль `backend/internal/i18n` со встроенными словарями для русского и английского языков.
   - Поддержка определения языка через query-параметр `?lang=`, HTTP-заголовок `Accept-Language` и резервную конфигурацию `server.default_language`.
@@ -20,6 +21,7 @@
   - Команды ручного переключения локали: `/lang ru` и `/lang en`.
 
 #### Инфраструктура и деплой (Production VPS Deployment)
+
 - **Zero-Build Packaging:**
   - Скрипты упаковки автономного дистрибутива `scripts/package-release.ps1` и `scripts/package-release.sh` для развертывания без компиляторов на целевом сервере.
 - **Автоматизация установки:**
@@ -30,6 +32,7 @@
   - Архитектурное решение `docs/decisions/15_backend_i18n_architecture.md`.
 
 #### Фронтенд и брендинг (Vector SVG Integration)
+
 - **Векторный логотип и SVG Favicon:**
   - Интегрирован официальный векторный логотип `media/Boyan_logo_transparent.svg` в качестве `logo.svg` и `favicon.svg` для `web-desktop` и `web-mobile`.
   - Обновлены шапки навигации (`Navbar.vue`, `TopHeader.vue`), экран входа (`LoginView.vue`) и настройки (`SettingsView.vue`).
