@@ -85,3 +85,131 @@ func (r *UserRepository) EnsureAdminUser(ctx context.Context, username, password
 	}
 	return nil
 }
+
+// GetByID ищет пользователя по его идентификатору.
+func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
+	var user models.User
+	err := r.pool.Reader.GetContext(ctx, &user, `SELECT * FROM users WHERE id = ?`, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+	return &user, nil
+}
+
+// ListUsers возвращает список пользователей с фильтрацией и пагинацией.
+func (r *UserRepository) ListUsers(ctx context.Context, filter models.UserFilter) (*models.UserListResponse, error) {
+	var whereConditions []string
+	var args []any
+
+	if filter.Query != "" {
+		whereConditions = append(whereConditions, "username LIKE ?")
+		args = append(args, "%"+filter.Query+"%")
+	}
+	if filter.Role != "" {
+		whereConditions = append(whereConditions, "role = ?")
+		args = append(args, string(filter.Role))
+	}
+	if filter.IsActive != nil {
+		whereConditions = append(whereConditions, "is_active = ?")
+		args = append(args, *filter.IsActive)
+	}
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE "
+		for i, cond := range whereConditions {
+			if i > 0 {
+				whereClause += " AND "
+			}
+			whereClause += cond
+		}
+	}
+
+	// Подсчет общего количества
+	countQuery := "SELECT COUNT(*) FROM users " + whereClause
+	var total int
+	err := r.pool.Reader.GetContext(ctx, &total, countQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("count users: %w", err)
+	}
+
+	// Выборка пользователей
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := "SELECT * FROM users " + whereClause + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	queryArgs := append(args, limit, offset)
+
+	var users []models.User
+	err = r.pool.Reader.SelectContext(ctx, &users, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("select users: %w", err)
+	}
+
+	if users == nil {
+		users = []models.User{}
+	}
+
+	return &models.UserListResponse{
+		Users: users,
+		Total: total,
+	}, nil
+}
+
+// UpdateUser обновляет роль и статус активности пользователя.
+func (r *UserRepository) UpdateUser(ctx context.Context, id string, role models.Role, isActive bool) error {
+	res, err := r.pool.Writer.ExecContext(ctx, `
+		UPDATE users SET role = ?, is_active = ? WHERE id = ?
+	`, role, isActive, id)
+	if err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// UpdatePassword изменяет пароль пользователя на новый.
+func (r *UserRepository) UpdatePassword(ctx context.Context, id string, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	res, err := r.pool.Writer.ExecContext(ctx, `
+		UPDATE users SET password_hash = ? WHERE id = ?
+	`, string(hash), id)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteUser удаляет пользователя по его идентификатору.
+func (r *UserRepository) DeleteUser(ctx context.Context, id string) error {
+	res, err := r.pool.Writer.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+

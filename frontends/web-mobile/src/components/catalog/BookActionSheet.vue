@@ -37,10 +37,11 @@
             class="w-20 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-theme-card border border-theme flex items-center justify-center relative shadow"
           >
             <img
-              v-if="book.cover_cached"
+              v-if="!imgError"
               :src="api.getCoverUrl(book.id)"
               :alt="book.title"
               class="w-full h-full object-cover"
+              @error="imgError = true"
             />
             <BookIcon v-else class="w-8 h-8 text-theme-muted opacity-40" />
           </div>
@@ -159,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -184,6 +185,8 @@ import { useCatalogStore } from '@/stores/catalog'
 const props = defineProps<{
   book: Book | null
 }>()
+
+const imgError = ref(false)
 
 const emit = defineEmits<{
   (e: 'close'): void

@@ -231,10 +231,38 @@ REST API error responses use a standardized hybrid payload:
 
 #### Administration
 
-- `GET /api/v1/admin/quarantine` — List quarantined files.
-- `POST /api/v1/admin/quarantine/{id}/restore` — Force import quarantined file into the library.
-- `DELETE /api/v1/admin/quarantine/{id}` — Permanently delete file from disk.
-- `POST /api/v1/admin/import/calibre` — Trigger batch Calibre import.
+- **Dashboard & Host Metrics:**
+  - `GET /api/v1/admin/dashboard` — Aggregated system overview: host metrics (RAM, CPU, goroutines, uptime, disk stats), SQLite engine (file size, WAL status, FTS5), cover thumbnail cache, and Telegram bot health.
+  - `POST /api/v1/admin/maintenance/checkpoint` — Explicit SQLite WAL checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`).
+  - `POST /api/v1/admin/maintenance/purge-cache` — Purge thumbnail image cache on disk.
+  - `GET /api/v1/admin/logs` — In-memory ring buffer log viewer (last 200 `slog` events) with severity level and substring filtering.
+- **User Management:**
+  - `GET /api/v1/admin/users` — Paginated user directory with username and role search.
+  - `POST /api/v1/admin/users` — Create user with specified role (`admin`, `user`, `restricted`).
+  - `PUT /api/v1/admin/users/{id}` — Update user role and active status.
+  - `PUT /api/v1/admin/users/{id}/password` — Administrative password override.
+  - `DELETE /api/v1/admin/users/{id}` — Delete user account (with self-deletion guard).
+  - `POST /api/v1/auth/register` — Public user registration (enabled when `allow_public_registration` is true).
+- **Book Curation & Metadata:**
+  - `GET /api/v1/admin/books` — Extended book inventory with disk paths and raw metadata.
+  - `PUT /api/v1/admin/books/{id}` — Update book metadata (title, authors, series, genres, annotation, publisher, language, year) with SQLite FTS5 re-indexing.
+  - `DELETE /api/v1/admin/books/{id}?delete_files=true|false` — Remove book with optional physical disk file deletion.
+  - `POST /api/v1/admin/books/batch` — Batch actions (bulk deletion, bulk genre/series assignment, cover regeneration).
+  - `POST /api/v1/admin/books/{id}/regenerate-cover` — Force extract cover from the original book file.
+- **Storage & Task Manager:**
+  - `POST /api/v1/admin/tasks/scan-watch` — Trigger background scan of incoming directory (`watch_dir`).
+  - `POST /api/v1/admin/tasks/rescan-library` — Trigger background rescan of the full library (`library_dir`).
+  - `GET /api/v1/admin/tasks` — Inspect active and completed background tasks and their progress.
+  - `POST /api/v1/admin/tasks/{id}/cancel` — Cancel a running background task.
+  - `POST /api/v1/admin/import/calibre` — Trigger batch Calibre library import.
+- **Quarantine Moderation:**
+  - `GET /api/v1/admin/quarantine` — List quarantined duplicate files.
+  - `POST /api/v1/admin/quarantine/{id}/restore` — Force import quarantined file into the library.
+  - `DELETE /api/v1/admin/quarantine/{id}` — Permanently delete file from quarantine and disk.
+- **System Settings:**
+  - `GET /api/v1/admin/settings` — Fetch active system configuration.
+  - `PUT /api/v1/admin/settings` — Validate and persist updated settings to `config.yaml`.
+  - `POST /api/v1/admin/settings/reload` — Hot reload internal services without server restart.
 
 ---
 

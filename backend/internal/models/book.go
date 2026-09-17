@@ -72,3 +72,47 @@ type BookFile struct {
 	SHA256           string    `db:"sha256" json:"sha256"`
 	CreatedAt        time.Time `db:"created_at" json:"created_at"`
 }
+
+// AuthorInput описывает автора при обновлении книги администратором.
+type AuthorInput struct {
+	Name  string `json:"name"`
+	Role  string `json:"role,omitempty"`
+	Order int    `json:"order,omitempty"`
+}
+
+// SeriesInput описывает серию при обновлении книги администратором.
+type SeriesInput struct {
+	Name  string  `json:"name"`
+	Index float64 `json:"index,omitempty"`
+}
+
+// UpdateBookMetadataRequest описывает запрос администратора на обновление метаданных книги.
+type UpdateBookMetadataRequest struct {
+	Title         string        `json:"title"`
+	OriginalTitle string        `json:"original_title"`
+	Annotation    string        `json:"annotation"`
+	Language      string        `json:"language"`
+	Publisher     string        `json:"publisher"`
+	PublishedDate string        `json:"published_date"`
+	ISBN          string        `json:"isbn"`
+	Authors       []AuthorInput `json:"authors"`
+	Series        []SeriesInput `json:"series"`
+	Genres        []string      `json:"genres"` // Коды жанров (напр. sf_space, prose)
+}
+
+// BatchBookActionRequest описывает групповую операцию над книгами.
+type BatchBookActionRequest struct {
+	BookIDs     []string `json:"book_ids"`
+	Action      string   `json:"action"` // "delete", "set_genre", "set_series", "regenerate_cover"
+	DeleteFiles bool     `json:"delete_files,omitempty"`
+	GenreCode   string   `json:"genre_code,omitempty"`
+	SeriesName  string   `json:"series_name,omitempty"`
+}
+
+// BatchActionResult возвращает итоги пакетной операции.
+type BatchActionResult struct {
+	SuccessCount int      `json:"success_count"`
+	ErrorCount   int      `json:"error_count"`
+	Errors       []string `json:"errors,omitempty"`
+}
+

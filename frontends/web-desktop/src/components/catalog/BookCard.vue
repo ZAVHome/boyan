@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { api } from '@/api/client'
 import type { Book } from '@/api/types'
 import { useI18n } from 'vue-i18n'
@@ -15,12 +15,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const imgError = ref(false)
 
 const coverUrl = computed(() => {
-  if (props.book.cover_cached) {
-    return api.getCoverUrl(props.book.id)
-  }
-  return ''
+  if (imgError.value) return ''
+  return api.getCoverUrl(props.book.id)
 })
 
 const authorSummary = computed(() => {
@@ -56,6 +55,7 @@ const availableFormats = computed(() => {
         :src="coverUrl"
         :alt="book.title"
         loading="lazy"
+        @error="imgError = true"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
       />
       <!-- Заглушка если обложки нет -->

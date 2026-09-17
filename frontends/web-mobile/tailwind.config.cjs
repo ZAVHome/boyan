@@ -26,6 +26,14 @@ module.exports = {
           DEFAULT: 'var(--accent)',
           hover: 'var(--accent-hover)',
           text: 'var(--accent-text)',
+        },
+        theme: {
+          DEFAULT: 'var(--border-color)',
+          bg: 'var(--bg-primary)',
+          card: 'var(--bg-surface)',
+          text: 'var(--text-primary)',
+          muted: 'var(--text-muted)',
+          border: 'var(--border-color)',
         }
       }
     },

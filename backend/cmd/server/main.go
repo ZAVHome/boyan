@@ -14,6 +14,7 @@ import (
 	"boyan/internal/api"
 	"boyan/internal/config"
 	"boyan/internal/importer/calibre"
+	"boyan/internal/logger"
 	"boyan/internal/parsers/cover"
 	"boyan/internal/storage"
 	"boyan/internal/telegram"
@@ -126,7 +127,7 @@ func main() {
 	}
 
 	// 10. Сборка HTTP роутера
-	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, quarantineRepo, progressRepo, coverCache, watcherInstance, configPath)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
@@ -195,5 +196,6 @@ func setupLogger(cfg config.LoggingConfig) {
 		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
 
-	slog.SetDefault(slog.New(handler))
+	buffered := logger.NewBufferedHandler(handler, logger.GlobalBuffer())
+	slog.SetDefault(slog.New(buffered))
 }

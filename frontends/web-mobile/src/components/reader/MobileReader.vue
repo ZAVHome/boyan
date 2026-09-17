@@ -302,7 +302,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import JSZip from 'jszip'
 import ePub, { type Book as EpubBook, type Rendition } from 'epubjs'
@@ -335,6 +335,16 @@ const isOfflineSource = ref(false)
 const loading = ref(true)
 const loadingText = ref('Загрузка книги...')
 const activeFormat = ref<'fb2' | 'epub' | 'unsupported'>('fb2')
+
+const authorNames = computed(() => {
+  if (book.value?.authors && book.value.authors.length > 0) {
+    return book.value.authors.map((a) => a.name).join(', ')
+  }
+  if (offlineBook.value?.author) {
+    return offlineBook.value.author
+  }
+  return ''
+})
 
 // Overlays
 const showOverlay = ref(true)
@@ -650,6 +660,35 @@ function renderFb2(xmlText: string) {
   }
 
   let fullHtml = ''
+
+  // Титульная страница с обложкой книги
+  let coverSrc = ''
+  const coverEl = doc.querySelector('title-info coverpage image, coverpage image')
+  const coverHref = (
+    coverEl?.getAttribute('l:href') ||
+    coverEl?.getAttribute('xlink:href') ||
+    coverEl?.getAttribute('href') ||
+    ''
+  ).replace(/^#/, '')
+
+  if (coverHref && binaries[coverHref]) {
+    coverSrc = binaries[coverHref]
+  } else if (props.bookId) {
+    coverSrc = api.getCoverUrl(props.bookId)
+  }
+
+  if (coverSrc) {
+    const bookTitle = book.value?.title || offlineBook.value?.title || ''
+    const bookAuthors = authorNames.value
+    fullHtml += `
+      <div class="text-center my-6 pb-6 border-b border-theme/60">
+        <img src="${coverSrc}" alt="${bookTitle}" class="max-h-[50vh] max-w-[240px] mx-auto rounded-xl shadow-lg object-contain mb-4" />
+        <h1 class="text-xl font-bold my-2 text-center text-theme-text leading-snug">${bookTitle}</h1>
+        ${bookAuthors ? `<p class="text-xs text-theme-muted text-center">${bookAuthors}</p>` : ''}
+      </div>
+    `
+  }
+
   mainBody.childNodes.forEach((c) => {
     fullHtml += processNode(c)
   })
@@ -665,6 +704,28 @@ function renderFb2(xmlText: string) {
     }
   }, 100)
 }
+
+function applyEpubTheme(theme: string) {
+  if (!epubRendition) return
+  const themesMap: Record<string, { body: Record<string, string> }> = {
+    dark: { body: { background: '#0f172a !important', color: '#f8fafc !important' } },
+    oled: { body: { background: '#000000 !important', color: '#ffffff !important' } },
+    sepia: { body: { background: '#fbf0d9 !important', color: '#433422 !important' } },
+    light: { body: { background: '#f8fafc !important', color: '#0f172a !important' } },
+    eink: { body: { background: '#ffffff !important', color: '#000000 !important' } }
+  }
+  const rules = themesMap[theme] || themesMap.light
+  epubRendition.themes.default(rules)
+}
+
+watch(
+  () => themeStore.currentTheme,
+  (newTheme) => {
+    if (activeFormat.value === 'epub' && epubRendition) {
+      applyEpubTheme(newTheme)
+    }
+  }
+)
 
 async function loadEpubOnline() {
   loadingText.value = 'Загрузка и рендеринг EPUB...'
@@ -696,6 +757,7 @@ async function renderEpubFromSource(source: string | ArrayBuffer) {
     })
 
     await epubRendition.display()
+    applyEpubTheme(themeStore.currentTheme)
 
     epubRendition.on('relocated', (location: any) => {
       if (location && location.start && location.start.percentage) {

@@ -1,10 +1,13 @@
 /* Стили мобильной читалки */
 
+.reading-content,
 .mobile-reader-content {
   color: var(--text-primary);
+  background-color: var(--bg-primary);
   line-height: var(--reader-line-height, 1.6);
   font-size: var(--reader-font-size, 17px);
   padding: 1rem 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .mobile-reader-content.font-serif {

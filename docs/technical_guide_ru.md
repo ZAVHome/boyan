@@ -231,10 +231,38 @@ CREATE VIRTUAL TABLE books_fts USING fts5(
 
 #### Администрирование
 
-- `GET /api/v1/admin/quarantine` — список файлов в карантине.
-- `POST /api/v1/admin/quarantine/{id}/restore` — принудительное восстановление файла в каталог.
-- `DELETE /api/v1/admin/quarantine/{id}` — удаление файла из карантина и с диска.
-- `POST /api/v1/admin/import/calibre` — запуск пакетного импорта библиотеки Calibre.
+- **Дашборд и метрики:**
+  - `GET /api/v1/admin/dashboard` — агрегированная сводка: хост (RAM, CPU, горутины, аптайм, диск), база SQLite (размер, WAL, FTS5), кэш обложек, статус Telegram-бота.
+  - `POST /api/v1/admin/maintenance/checkpoint` — принудительный сброс WAL-журнала в основную БД (`PRAGMA wal_checkpoint(TRUNCATE)`).
+  - `POST /api/v1/admin/maintenance/purge-cache` — полная очистка дискового кэша миниатюр обложек.
+  - `GET /api/v1/admin/logs` — просмотр 200 последних событий из кольцевого буфера памяти `slog` с фильтрами по уровню и подстроке.
+- **Управление пользователями:**
+  - `GET /api/v1/admin/users` — постраничный список пользователей с фильтрацией по логину и роли.
+  - `POST /api/v1/admin/users` — создание учетной записи с заданной ролью (`admin`, `user`, `restricted`).
+  - `PUT /api/v1/admin/users/{id}` — обновление роли и статуса активности пользователя.
+  - `PUT /api/v1/admin/users/{id}/password` — административная смена пароля.
+  - `DELETE /api/v1/admin/users/{id}` — удаление учетной записи (с защитой от удаления самого себя).
+  - `POST /api/v1/auth/register` — публичная регистрация (доступна, если включена опция `allow_public_registration`).
+- **Кураторство каталога книг:**
+  - `GET /api/v1/admin/books` — расширенный реестр книг с путями к файлам и полными метаданными.
+  - `PUT /api/v1/admin/books/{id}` — обновление метаданных книги (название, авторы, серии, жанры, аннотация, издательство, язык, год) с синхронизацией SQLite FTS5.
+  - `DELETE /api/v1/admin/books/{id}?delete_files=true|false` — удаление книги из каталога с опциональным стиранием физических файлов с диска.
+  - `POST /api/v1/admin/books/batch` — пакетные операции (удаление, массовое назначение жанра, серии или регенерация обложек).
+  - `POST /api/v1/admin/books/{id}/regenerate-cover` — повторное извлечение обложки из исходного файла книги.
+- **Хранилище и фоновые задачи (Task Manager):**
+  - `POST /api/v1/admin/tasks/scan-watch` — запуск фонового сканирования входящей директории (`watch_dir`).
+  - `POST /api/v1/admin/tasks/rescan-library` — запуск полного пересканирования библиотеки (`library_dir`).
+  - `GET /api/v1/admin/tasks` — опрос списка фоновых задач и их прогресса (`progress_percent`, `message`, `status`).
+  - `POST /api/v1/admin/tasks/{id}/cancel` — отмена выполняемой фоновой задачи.
+  - `POST /api/v1/admin/import/calibre` — запуск импорта из Calibre `metadata.db`.
+- **Карантин дубликатов:**
+  - `GET /api/v1/admin/quarantine` — список файлов в очереди карантина.
+  - `POST /api/v1/admin/quarantine/{id}/restore` — принудительное восстановление файла в каталог.
+  - `DELETE /api/v1/admin/quarantine/{id}` — удаление файла из карантина и с диска.
+- **Системные настройки:**
+  - `GET /api/v1/admin/settings` — получение текущих параметров конфигурации комплекса.
+  - `PUT /api/v1/admin/settings` — валидация и сохранение настроек в рабочий `config.yaml`.
+  - `POST /api/v1/admin/settings/reload` — горячий перезапуск внутренних служб без прерывания HTTP-процесса.
 
 ---
 

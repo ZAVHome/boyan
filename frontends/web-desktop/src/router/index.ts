@@ -35,6 +35,48 @@ const routes = [
     meta: { requiresAdmin: true }
   },
   {
+    path: '/admin',
+    component: () => import('@/components/admin/AdminLayout.vue'),
+    meta: { requiresAdmin: true },
+    children: [
+      {
+        path: '',
+        name: 'admin-dashboard',
+        component: () => import('@/views/admin/AdminDashboardView.vue')
+      },
+      {
+        path: 'users',
+        name: 'admin-users',
+        component: () => import('@/views/admin/AdminUsersView.vue')
+      },
+      {
+        path: 'books',
+        name: 'admin-books',
+        component: () => import('@/views/admin/AdminBooksView.vue')
+      },
+      {
+        path: 'quarantine',
+        name: 'admin-quarantine',
+        component: () => import('@/views/admin/AdminQuarantineView.vue')
+      },
+      {
+        path: 'storage',
+        name: 'admin-storage',
+        component: () => import('@/views/admin/AdminStorageView.vue')
+      },
+      {
+        path: 'settings',
+        name: 'admin-settings',
+        component: () => import('@/views/admin/AdminSettingsView.vue')
+      },
+      {
+        path: 'logs',
+        name: 'admin-logs',
+        component: () => import('@/views/admin/AdminLogsView.vue')
+      }
+    ]
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue')

@@ -204,6 +204,49 @@ func (w *Watcher) scanDirectory(ctx context.Context, dir string) {
 	})
 }
 
+// ScanDirectoryWithProgress выполняет полное сканирование директории с оповещением о прогрессе.
+func (w *Watcher) ScanDirectoryWithProgress(
+	ctx context.Context,
+	dir string,
+	onProgress func(processed, total int, currentItem string, err error),
+) error {
+	var files []string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if isSupportedBookFile(path) && info.Size() > 0 {
+			files = append(files, path)
+		}
+		return nil
+	})
+
+	total := len(files)
+	if total == 0 {
+		if onProgress != nil {
+			onProgress(0, 0, "", nil)
+		}
+		return nil
+	}
+
+	for i, path := range files {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		filename := filepath.Base(path)
+		_, err := w.ProcessFile(ctx, path, filename)
+		if onProgress != nil {
+			onProgress(i+1, total, filename, err)
+		}
+	}
+
+	return nil
+}
+
+
 // ProcessFile выполняет полный пайплайн инжеста книги (детекция формата, парсинг, дедупликация, сохранение).
 func (w *Watcher) ProcessFile(ctx context.Context, sourcePath, originalFilename string) (*ProcessResult, error) {
 	w.processingMu.Lock()

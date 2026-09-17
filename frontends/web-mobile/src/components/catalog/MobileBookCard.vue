@@ -8,11 +8,12 @@
       class="w-16 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-theme-bg border border-theme flex items-center justify-center relative shadow-sm"
     >
       <img
-        v-if="book.cover_cached"
+        v-if="!imgError"
         :src="api.getCoverUrl(book.id)"
         :alt="book.title"
         class="w-full h-full object-cover"
         loading="lazy"
+        @error="imgError = true"
       />
       <div v-else class="text-theme-muted flex flex-col items-center justify-center p-1 text-center">
         <BookIcon class="w-6 h-6 mb-1 opacity-40" />
@@ -74,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { Book as BookIcon, BookOpen, Check } from 'lucide-vue-next'
 import { api } from '@/api/client'
 import type { Book } from '@/api/types'
@@ -83,6 +84,8 @@ import { useOfflineStore } from '@/stores/offline'
 const props = defineProps<{
   book: Book
 }>()
+
+const imgError = ref(false)
 
 defineEmits<{
   (e: 'select', book: Book): void

@@ -12,6 +12,7 @@ const authStore = useAuthStore()
 const catalogStore = useCatalogStore()
 
 const isReaderMode = computed(() => route.name === 'reader')
+const isAdminMode = computed(() => route.path.startsWith('/admin'))
 const showUploadModal = ref(false)
 
 onMounted(() => {
@@ -24,10 +25,11 @@ function handleUploaded() {
 </script>
 
 <template>
-  <!-- Полноэкранный режим чтения без лишних панелей -->
-  <div v-if="isReaderMode" class="min-h-screen bg-bg-primary">
+  <!-- Полноэкранный режим чтения или панели администратора -->
+  <div v-if="isReaderMode || isAdminMode" class="min-h-screen bg-bg-primary">
     <router-view />
   </div>
+
 
   <!-- Стандартный макет приложения с навигацией и сайдбаром -->
   <div v-else class="min-h-screen flex flex-col bg-bg-primary text-fg-primary">

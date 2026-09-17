@@ -37,8 +37,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative" ref="dropdownRef">
+  <div class="relative inline-block text-left" ref="dropdownRef">
     <button
+      type="button"
       @click.stop="isOpen = !isOpen"
       class="p-2 rounded-lg bg-bg-surface border border-border hover:bg-bg-hover text-fg-primary transition-colors flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
       :title="t(`theme.${themeStore.currentTheme}`)"
@@ -59,17 +60,18 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="absolute right-0 mt-2 w-40 rounded-xl bg-bg-surface border border-border shadow-xl py-1 z-50 overflow-hidden"
+        class="absolute right-0 top-full mt-2 w-40 rounded-xl bg-bg-surface border border-border shadow-xl py-1 z-50 overflow-hidden"
       >
         <button
           v-for="th in themes"
           :key="th.id"
-          @click="selectTheme(th.id)"
-          class="w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-bg-hover transition-colors"
+          type="button"
+          @click.stop="selectTheme(th.id)"
+          class="w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-bg-hover transition-colors cursor-pointer"
           :class="themeStore.currentTheme === th.id ? 'font-semibold text-accent' : 'text-fg-primary'"
         >
-          <component :is="th.icon" class="w-4 h-4" />
-          <span>{{ t(th.labelKey) }}</span>
+          <component :is="th.icon" class="w-4 h-4 shrink-0 pointer-events-none" />
+          <span class="pointer-events-none">{{ t(th.labelKey) }}</span>
         </button>
       </div>
     </transition>

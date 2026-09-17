@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useCatalogStore } from '@/stores/catalog'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -12,12 +12,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  BookX
+  BookX,
+  BookOpen
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const catalogStore = useCatalogStore()
+const imgErrors = ref<Record<string, boolean>>({})
 
 onMounted(() => {
   if (catalogStore.books.length === 0) {
@@ -106,13 +108,15 @@ function onBookRead(book: Book) {
         class="p-4 rounded-xl bg-bg-surface border border-border hover:border-accent/40 cursor-pointer flex items-center justify-between gap-4 transition-all"
       >
         <div class="flex items-center gap-4 min-w-0">
-          <div class="w-12 h-16 shrink-0 rounded-lg overflow-hidden bg-bg-secondary border border-border">
+          <div class="w-12 h-16 shrink-0 rounded-lg overflow-hidden bg-bg-secondary border border-border flex items-center justify-center">
             <img
-              v-if="book.cover_cached"
+              v-if="!imgErrors[book.id]"
               :src="`/covers/${book.id}`"
               :alt="book.title"
               class="w-full h-full object-cover"
+              @error="imgErrors[book.id] = true"
             />
+            <BookOpen v-else class="w-5 h-5 text-accent/40" />
           </div>
           <div class="min-w-0">
             <h4 class="font-bold text-sm text-fg-primary truncate">{{ book.title }}</h4>

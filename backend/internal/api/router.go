@@ -31,7 +31,13 @@ func NewRouter(
 	progressRepo *storage.ProgressRepository,
 	coverCache *cover.CoverCache,
 	watcherInstance *watcher.Watcher,
+	configPathOpt ...string,
 ) *chi.Mux {
+	configPath := "config.yaml"
+	if len(configPathOpt) > 0 && configPathOpt[0] != "" {
+		configPath = configPathOpt[0]
+	}
+
 	r := chi.NewRouter()
 
 	// Глобальные middleware
@@ -46,18 +52,28 @@ func NewRouter(
 	// Инициализация сервисов
 	streamer := services.NewStreamer(bookRepo, cfg.Storage.LibraryDir, cfg.OPDS.StreamFromZIP)
 	calibreImporter := calibre.NewImporter(cfg, bookRepo, coverCache)
+	taskManager := services.NewTaskManager()
 
 	// Инициализация хендлеров
 	healthH := handlers.NewHealthHandler(pool)
 	authH := handlers.NewAuthHandler(cfg, userRepo)
-	booksH := handlers.NewBooksHandler(bookRepo, coverCache)
+	booksH := handlers.NewBooksHandler(cfg, bookRepo, coverCache)
 	uploadH := handlers.NewUploadHandler(watcherInstance)
 	quarantineH := handlers.NewQuarantineHandler(cfg, quarantineRepo, bookRepo, coverCache)
 	progressH := handlers.NewProgressHandler(progressRepo, bookRepo)
 	calibreH := handlers.NewCalibreHandler(calibreImporter)
 
+	// Хендлеры расширенной панели администратора
+	adminDashboardH := handlers.NewAdminDashboardHandler(cfg, pool, bookRepo)
+	adminUsersH := handlers.NewAdminUsersHandler(userRepo)
+	adminBooksH := handlers.NewAdminBooksHandler(cfg, bookRepo, coverCache)
+	adminTasksH := handlers.NewAdminTasksHandler(taskManager, watcherInstance, cfg)
+	adminSettingsH := handlers.NewAdminSettingsHandler(cfg, configPath)
+
 	// Системные эндпоинты
 	r.Get("/health", healthH.HealthCheck)
+	// Прямой доступ к обложкам без префикса /api/v1 (проксируется Vite и Nginx)
+	r.Get("/covers/{id}", booksH.GetCover)
 
 	// REST API v1 ветка
 	r.Route("/api/v1", func(r chi.Router) {
@@ -69,9 +85,10 @@ func NewRouter(
 			http.Redirect(w, r, "/api/v1/docs/index.html", http.StatusMovedPermanently)
 		})
 
-		// Аутентификация
+		// Аутентификация и регистрация
 		r.Post("/auth/login", authH.Login)
 		r.Post("/auth/logout", authH.Logout)
+		r.Post("/auth/register", authH.Register)
 
 		// Профиль пользователя
 		r.With(customMiddleware.RequireAuth).Get("/auth/me", authH.Me)
@@ -102,17 +119,56 @@ func NewRouter(
 			r.Get("/shelves/{type}", progressH.GetShelfBooks)
 		})
 
-		// Карантин дубликатов и функции администратора (требует прав администратора)
+		// Административный раздел (требует роли admin)
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.RequireAdmin)
 
+			// Карантин дубликатов
 			r.Get("/quarantine", quarantineH.ListQuarantine)
 			r.Get("/quarantine/{id}", quarantineH.GetQuarantineItem)
 			r.Post("/quarantine/{id}/resolve", quarantineH.ResolveQuarantine)
 
+			// Импорт Calibre
 			r.Post("/admin/import/calibre", calibreH.ImportCalibre)
+
+			// Дашборд, мониторинг хоста, БД и кэша
+			r.Get("/admin/dashboard/stats", adminDashboardH.GetStats)
+			r.Get("/admin/system/host", adminDashboardH.GetHostMetrics)
+			r.Get("/admin/system/database", adminDashboardH.GetDatabaseMetrics)
+			r.Post("/admin/system/database/checkpoint", adminDashboardH.CheckpointDatabase)
+			r.Get("/admin/system/cache", adminDashboardH.GetCacheMetrics)
+			r.Post("/admin/system/cache/purge", adminDashboardH.PurgeCache)
+			r.Get("/admin/system/logs", adminDashboardH.GetLogs)
+			r.Get("/admin/system/telegram", adminDashboardH.GetTelegramStatus)
+
+			// Управление пользователями
+			r.Get("/admin/users", adminUsersH.ListUsers)
+			r.Post("/admin/users", adminUsersH.CreateUser)
+			r.Get("/admin/users/{id}", adminUsersH.GetUser)
+			r.Put("/admin/users/{id}", adminUsersH.UpdateUser)
+			r.Put("/admin/users/{id}/password", adminUsersH.UpdatePassword)
+			r.Delete("/admin/users/{id}", adminUsersH.DeleteUser)
+
+			// Управление книгами, кураторство и пакетные операции
+			r.Get("/admin/books", adminBooksH.ListBooks)
+			r.Put("/admin/books/{id}", adminBooksH.UpdateBookMetadata)
+			r.Delete("/admin/books/{id}", adminBooksH.DeleteBook)
+			r.Post("/admin/books/{id}/cover", adminBooksH.RegenerateCover)
+			r.Post("/admin/books/batch", adminBooksH.BatchAction)
+
+			// Сканер хранилища и фоновые задачи
+			r.Post("/admin/scanner/run", adminTasksH.RunScan)
+			r.Get("/admin/tasks", adminTasksH.ListTasks)
+			r.Get("/admin/tasks/{id}", adminTasksH.GetTask)
+			r.Post("/admin/tasks/{id}/cancel", adminTasksH.CancelTask)
+
+			// Настройки сервера и перезапуск служб
+			r.Get("/admin/settings", adminSettingsH.GetSettings)
+			r.Put("/admin/settings", adminSettingsH.UpdateSettings)
+			r.Post("/admin/services/reload", adminSettingsH.ReloadServices)
 		})
 	})
+
 
 	// Middleware аутентификации OPDS для E-Ink читалок
 	opdsAuth := customMiddleware.OPDSAuth(userRepo, cfg.OPDS.AllowAnonymousReading, cfg.Server.JWTSecret)

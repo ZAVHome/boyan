@@ -116,6 +116,34 @@ func TestAPIHandlers(t *testing.T) {
 	if rec404.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for missing book, got %d", rec404.Code)
 	}
+
+	// 6. Проверка прямого эндпоинта /covers/{id} и /api/v1/covers/{id}
+	// Без обложки -> 404
+	reqCover404 := httptest.NewRequest(http.MethodGet, "/covers/test-book-id-123", nil)
+	recCover404 := httptest.NewRecorder()
+	router.ServeHTTP(recCover404, reqCover404)
+	if recCover404.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing cover on /covers/{id}, got %d", recCover404.Code)
+	}
+
+	// Сохраняем тестовую обложку
+	_, _ = coverCache.SaveCover("test-book-id-123", []byte("fake-jpeg-cover-data"))
+
+	// Запрос на корень /covers/{id}
+	reqCoverRoot := httptest.NewRequest(http.MethodGet, "/covers/test-book-id-123", nil)
+	recCoverRoot := httptest.NewRecorder()
+	router.ServeHTTP(recCoverRoot, reqCoverRoot)
+	if recCoverRoot.Code != http.StatusOK {
+		t.Errorf("expected 200 for root /covers/{id}, got %d", recCoverRoot.Code)
+	}
+
+	// Запрос на /api/v1/covers/{id}
+	reqCoverAPI := httptest.NewRequest(http.MethodGet, "/api/v1/covers/test-book-id-123", nil)
+	recCoverAPI := httptest.NewRecorder()
+	router.ServeHTTP(recCoverAPI, reqCoverAPI)
+	if recCoverAPI.Code != http.StatusOK {
+		t.Errorf("expected 200 for /api/v1/covers/{id}, got %d", recCoverAPI.Code)
+	}
 }
 
 func TestAPI_I18nErrorResponses(t *testing.T) {

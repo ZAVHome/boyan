@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"boyan/internal/auth"
@@ -143,3 +144,63 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": tr.T("AUTH_LOGGED_OUT")})
 }
+
+// Register выполняет самостоятельную регистрацию пользователя, если она включена в конфигурации.
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.Admin.AllowPublicRegistration {
+		writeAPIError(w, r, http.StatusForbidden, "REGISTRATION_DISABLED")
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
+		return
+	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" || req.Password == "" {
+		writeAPIError(w, r, http.StatusBadRequest, "AUTH_FIELDS_REQUIRED")
+		return
+	}
+
+	existing, _ := h.userRepo.GetByUsername(r.Context(), req.Username)
+	if existing != nil {
+		writeAPIError(w, r, http.StatusConflict, "USER_ALREADY_EXISTS")
+		return
+	}
+
+	user, err := h.userRepo.CreateUser(r.Context(), req.Username, req.Password, models.RoleUser)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	token, expiresAt, err := auth.GenerateToken(user, h.cfg.Server.JWTSecret, h.cfg.Server.JWTExpirationHours)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "AUTH_TOKEN_GEN_FAILED")
+		return
+	}
+
+	maxAge := int(time.Until(expiresAt).Seconds())
+	http.SetCookie(w, &http.Cookie{
+		Name:     "boyan_token",
+		Value:    token,
+		Path:     "/",
+		Expires:  expiresAt,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	writeJSON(w, http.StatusCreated, LoginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt,
+		User: UserDTO{
+			ID:       user.ID,
+			Username: user.Username,
+			Role:     user.Role,
+		},
+	})
+}
+

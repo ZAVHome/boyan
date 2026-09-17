@@ -14,7 +14,8 @@ import {
   BookMarked,
   Layers,
   User as UserIcon,
-  Tag
+  Tag,
+  Edit
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -32,12 +33,11 @@ const authStore = useAuthStore()
 const currentProgress = ref<{ progress_percent: number } | null>(null)
 const activeShelf = ref<string | null>(null)
 const shelfLoading = ref(false)
+const imgError = ref(false)
 
 const coverUrl = computed(() => {
-  if (props.book.cover_cached) {
-    return api.getCoverUrl(props.book.id)
-  }
-  return ''
+  if (imgError.value) return ''
+  return api.getCoverUrl(props.book.id)
 })
 
 const authorNames = computed(() => {
@@ -105,6 +105,7 @@ function startReading() {
               :src="coverUrl"
               :alt="book.title"
               class="w-full h-full object-cover"
+              @error="imgError = true"
             />
             <div v-else class="w-full h-full p-4 flex flex-col justify-center items-center text-center bg-gradient-to-br from-bg-secondary to-bg-primary">
               <BookOpen class="w-10 h-10 text-accent/50 mb-2" />
@@ -192,6 +193,18 @@ function startReading() {
                   <Bookmark class="w-4 h-4" />
                 </button>
               </div>
+
+              <!-- Кнопка редактирования для администратора -->
+              <router-link
+                v-if="authStore.isAdmin"
+                :to="{ path: '/admin/books', query: { q: book.title } }"
+                @click="emit('close')"
+                class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-semibold transition-all"
+                :title="t('admin.books.edit_btn')"
+              >
+                <Edit class="w-3.5 h-3.5" />
+                <span>{{ t('admin.books.edit_btn') }}</span>
+              </router-link>
             </div>
           </div>
         </div>

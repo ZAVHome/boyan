@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { Book, ReadProgress } from '@/api/types'
 import { useI18n } from 'vue-i18n'
+import { useThemeStore, type ThemeMode } from '@/stores/theme'
 import JSZip from 'jszip'
 import ePub, { type Book as EpubBook, type Rendition } from 'epubjs'
 import {
@@ -14,7 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  X
+  X,
+  Sun,
+  Moon,
+  Sparkles,
+  Coffee
 } from 'lucide-vue-next'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 
@@ -24,6 +29,14 @@ const props = defineProps<{
 
 const router = useRouter()
 const { t } = useI18n()
+const themeStore = useThemeStore()
+
+const themeOptions = computed(() => [
+  { id: 'light' as ThemeMode, label: t('theme.light'), icon: Sun },
+  { id: 'dark' as ThemeMode, label: t('theme.dark'), icon: Moon },
+  { id: 'oled' as ThemeMode, label: t('theme.oled'), icon: Sparkles },
+  { id: 'sepia' as ThemeMode, label: t('theme.sepia'), icon: Coffee },
+])
 
 // Состояние книги и ридера
 const book = ref<Book | null>(null)
@@ -253,6 +266,35 @@ function renderFb2(xmlText: string) {
   }
 
   let fullHtml = ''
+
+  // Титульная страница с обложкой книги
+  let coverSrc = ''
+  const coverEl = doc.querySelector('title-info coverpage image, coverpage image')
+  const coverHref = (
+    coverEl?.getAttribute('l:href') ||
+    coverEl?.getAttribute('xlink:href') ||
+    coverEl?.getAttribute('href') ||
+    ''
+  ).replace(/^#/, '')
+
+  if (coverHref && binaries[coverHref]) {
+    coverSrc = binaries[coverHref]
+  } else if (props.bookId) {
+    coverSrc = api.getCoverUrl(props.bookId)
+  }
+
+  if (coverSrc) {
+    const bookTitle = book.value?.title || ''
+    const bookAuthors = book.value?.authors?.map(a => a.name).join(', ') || ''
+    fullHtml += `
+      <div class="reader-cover-section text-center my-8 pb-8 border-b border-border">
+        <img src="${coverSrc}" alt="${bookTitle}" class="max-h-[60vh] max-w-xs sm:max-w-sm md:max-w-md mx-auto rounded-2xl shadow-2xl object-contain mb-6" />
+        <h1 class="text-2xl sm:text-3xl font-bold my-3 text-center text-fg-primary">${bookTitle}</h1>
+        ${bookAuthors ? `<p class="text-base text-fg-secondary text-center">${bookAuthors}</p>` : ''}
+      </div>
+    `
+  }
+
   mainBody.childNodes.forEach(c => {
     fullHtml += processNode(c)
   })
@@ -268,6 +310,27 @@ function renderFb2(xmlText: string) {
     }
   }, 100)
 }
+
+function applyEpubTheme(theme: string) {
+  if (!epubRendition) return
+  const themesMap: Record<string, { body: Record<string, string> }> = {
+    dark: { body: { background: '#0f172a !important', color: '#f8fafc !important' } },
+    oled: { body: { background: '#000000 !important', color: '#ffffff !important' } },
+    sepia: { body: { background: '#fbf0d9 !important', color: '#433422 !important' } },
+    light: { body: { background: '#f8fafc !important', color: '#0f172a !important' } }
+  }
+  const rules = themesMap[theme] || themesMap.light
+  epubRendition.themes.default(rules)
+}
+
+watch(
+  () => themeStore.currentTheme,
+  (newTheme) => {
+    if (activeFormat.value === 'epub' && epubRendition) {
+      applyEpubTheme(newTheme)
+    }
+  }
+)
 
 async function loadEpubBook() {
   loadingText.value = 'Загрузка и рендеринг EPUB...'
@@ -290,6 +353,7 @@ async function loadEpubBook() {
     })
 
     await epubRendition.display()
+    applyEpubTheme(themeStore.currentTheme)
 
     epubRendition.on('relocated', (location: any) => {
       if (location && location.start && location.start.percentage) {
@@ -366,7 +430,7 @@ function setWidth(w: string) {
 <template>
   <div class="fixed inset-0 z-50 flex flex-col bg-bg-primary text-fg-primary select-text">
     <!-- Верхняя плавающая панель навигации ридера -->
-    <header class="h-14 px-4 border-b border-border bg-bg-surface/90 backdrop-blur-md flex items-center justify-between gap-4 shrink-0">
+    <header class="relative z-50 h-14 px-4 border-b border-border bg-bg-surface/90 backdrop-blur-md flex items-center justify-between gap-4 shrink-0">
       <div class="flex items-center gap-3">
         <button
           @click="router.back()"
@@ -392,7 +456,7 @@ function setWidth(w: string) {
 
         <!-- Содержание -->
         <button
-          @click="showToc = !showToc"
+          @click="showToc = !showToc; if (showToc) showSettings = false"
           class="p-2 rounded-xl border border-border hover:bg-bg-hover text-fg-secondary hover:text-fg-primary transition-colors"
           :title="t('reader.toc')"
         >
@@ -401,7 +465,7 @@ function setWidth(w: string) {
 
         <!-- Настройки типографики -->
         <button
-          @click="showSettings = !showSettings"
+          @click="showSettings = !showSettings; if (showSettings) showToc = false"
           class="p-2 rounded-xl border border-border hover:bg-bg-hover text-fg-secondary hover:text-fg-primary transition-colors"
           :title="t('reader.settings')"
         >
@@ -581,6 +645,23 @@ function setWidth(w: string) {
                 :class="columnWidth === '960px' ? 'bg-bg-surface text-accent font-bold shadow' : 'text-fg-secondary'"
               >
                 Широкая
+              </button>
+            </div>
+          </div>
+
+          <!-- Тема оформления -->
+          <div>
+            <label class="text-xs text-fg-muted block mb-1.5">{{ t('settings.theme') }}</label>
+            <div class="grid grid-cols-4 gap-1 bg-bg-primary p-1 rounded-xl border border-border">
+              <button
+                v-for="th in themeOptions"
+                :key="th.id"
+                @click="themeStore.setTheme(th.id)"
+                class="py-1.5 text-xs rounded-lg transition-colors flex flex-col items-center justify-center gap-1"
+                :class="themeStore.currentTheme === th.id ? 'bg-bg-surface text-accent font-bold shadow' : 'text-fg-secondary hover:text-fg-primary'"
+              >
+                <component :is="th.icon" class="w-3.5 h-3.5" />
+                <span class="text-[10px]">{{ th.label }}</span>
               </button>
             </div>
           </div>

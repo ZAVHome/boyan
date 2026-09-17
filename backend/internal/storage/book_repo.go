@@ -786,3 +786,319 @@ func (r *BookRepository) FindBookByTitleAndAuthor(ctx context.Context, title, au
 	return r.GetBookByID(ctx, bookID)
 }
 
+// GetBookFiles возвращает список всех файлов книги.
+func (r *BookRepository) GetBookFiles(ctx context.Context, bookID string) ([]models.BookFile, error) {
+	var files []models.BookFile
+	err := r.pool.Reader.SelectContext(ctx, &files, `SELECT * FROM book_files WHERE book_id = ?`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("get book files: %w", err)
+	}
+	return files, nil
+}
+
+// UpdateBookMetadata обновляет метаданные книги и ее связи в единой транзакции.
+func (r *BookRepository) UpdateBookMetadata(ctx context.Context, bookID string, req models.UpdateBookMetadataRequest) error {
+	tx, err := r.pool.Writer.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	now := time.Now().UTC()
+
+	// 1. Обновление таблицы books
+	res, err := tx.ExecContext(ctx, `
+		UPDATE books SET 
+			title = ?, original_title = ?, annotation = ?, language = ?, 
+			publisher = ?, published_date = ?, isbn = ?, updated_at = ?
+		WHERE id = ?
+	`, req.Title, req.OriginalTitle, req.Annotation, req.Language,
+		req.Publisher, req.PublishedDate, req.ISBN, now, bookID)
+	if err != nil {
+		return fmt.Errorf("update book table: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	// 2. Обновление авторов
+	_, err = tx.ExecContext(ctx, `DELETE FROM book_authors WHERE book_id = ?`, bookID)
+	if err != nil {
+		return fmt.Errorf("delete book authors: %w", err)
+	}
+
+	var authorNames []string
+	for i, a := range req.Authors {
+		trimmed := strings.TrimSpace(a.Name)
+		if trimmed == "" {
+			continue
+		}
+		authorNames = append(authorNames, trimmed)
+
+		var authorID string
+		err = tx.GetContext(ctx, &authorID, `SELECT id FROM authors WHERE name = ? LIMIT 1`, trimmed)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				authorID = uuid.NewString()
+				_, err = tx.ExecContext(ctx, `
+					INSERT INTO authors (id, name, sort_name) VALUES (?, ?, ?)
+				`, authorID, trimmed, trimmed)
+				if err != nil {
+					return fmt.Errorf("insert author %s: %w", trimmed, err)
+				}
+			} else {
+				return fmt.Errorf("lookup author: %w", err)
+			}
+		}
+
+		role := a.Role
+		if role == "" {
+			role = "author"
+		}
+		order := a.Order
+		if order == 0 {
+			order = i + 1
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO book_authors (book_id, author_id, role, author_order)
+			VALUES (?, ?, ?, ?)
+		`, bookID, authorID, role, order)
+		if err != nil {
+			return fmt.Errorf("link book author: %w", err)
+		}
+	}
+
+	// 3. Обновление серий
+	_, err = tx.ExecContext(ctx, `DELETE FROM book_series WHERE book_id = ?`, bookID)
+	if err != nil {
+		return fmt.Errorf("delete book series: %w", err)
+	}
+
+	var seriesNames []string
+	for _, s := range req.Series {
+		trimmed := strings.TrimSpace(s.Name)
+		if trimmed == "" {
+			continue
+		}
+		seriesNames = append(seriesNames, trimmed)
+
+		var seriesID string
+		err = tx.GetContext(ctx, &seriesID, `SELECT id FROM series WHERE name = ? LIMIT 1`, trimmed)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				seriesID = uuid.NewString()
+				_, err = tx.ExecContext(ctx, `
+					INSERT INTO series (id, name, sort_name) VALUES (?, ?, ?)
+				`, seriesID, trimmed, trimmed)
+				if err != nil {
+					return fmt.Errorf("insert series %s: %w", trimmed, err)
+				}
+			} else {
+				return fmt.Errorf("lookup series: %w", err)
+			}
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO book_series (book_id, series_id, series_index)
+			VALUES (?, ?, ?)
+		`, bookID, seriesID, s.Index)
+		if err != nil {
+			return fmt.Errorf("link book series: %w", err)
+		}
+	}
+
+	// 4. Обновление жанров
+	_, err = tx.ExecContext(ctx, `DELETE FROM book_genres WHERE book_id = ?`, bookID)
+	if err != nil {
+		return fmt.Errorf("delete book genres: %w", err)
+	}
+
+	for _, gCode := range req.Genres {
+		code := strings.TrimSpace(gCode)
+		if code == "" {
+			continue
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO genres (code, name_ru, name_en, category_ru, category_en)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(code) DO NOTHING
+		`, code, code, code, "Прочее", "Other")
+		if err != nil {
+			return fmt.Errorf("ensure genre %s: %w", code, err)
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO book_genres (book_id, genre_code)
+			VALUES (?, ?)
+			ON CONFLICT(book_id, genre_code) DO NOTHING
+		`, bookID, code)
+		if err != nil {
+			return fmt.Errorf("link book genre: %w", err)
+		}
+	}
+
+	// 5. Обновление FTS5
+	_, _ = tx.ExecContext(ctx, `DELETE FROM books_fts WHERE book_id = ?`, bookID)
+	authorsStr := strings.Join(authorNames, " ")
+	seriesStr := strings.Join(seriesNames, " ")
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO books_fts (book_id, title, original_title, annotation, author_names, series_names)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, bookID, req.Title, req.OriginalTitle, req.Annotation, authorsStr, seriesStr)
+	if err != nil {
+		return fmt.Errorf("update fts: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// BatchDeleteBooks удаляет массив книг из БД и возвращает список путей к их файлам.
+func (r *BookRepository) BatchDeleteBooks(ctx context.Context, bookIDs []string) ([]string, error) {
+	if len(bookIDs) == 0 {
+		return nil, nil
+	}
+
+	var filePaths []string
+	query := fmt.Sprintf(`SELECT file_path FROM book_files WHERE book_id IN (%s)`, joinStringsWithComma(bookIDs))
+	_ = r.pool.Reader.SelectContext(ctx, &filePaths, query)
+
+	tx, err := r.pool.Writer.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	inClause := joinStringsWithComma(bookIDs)
+	_, _ = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM books_fts WHERE book_id IN (%s)`, inClause))
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM books WHERE id IN (%s)`, inClause))
+	if err != nil {
+		return nil, fmt.Errorf("delete books: %w", err)
+	}
+
+	return filePaths, tx.Commit()
+}
+
+// BatchUpdateGenres добавляет указанный жанр ко всем выбранным книгам.
+func (r *BookRepository) BatchUpdateGenres(ctx context.Context, bookIDs []string, genreCode string) error {
+	genreCode = strings.TrimSpace(genreCode)
+	if genreCode == "" || len(bookIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.pool.Writer.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO genres (code, name_ru, name_en, category_ru, category_en)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(code) DO NOTHING
+	`, genreCode, genreCode, genreCode, "Прочее", "Other")
+	if err != nil {
+		return err
+	}
+
+	for _, bookID := range bookIDs {
+		_, _ = tx.ExecContext(ctx, `
+			INSERT INTO book_genres (book_id, genre_code)
+			VALUES (?, ?)
+			ON CONFLICT(book_id, genre_code) DO NOTHING
+		`, bookID, genreCode)
+	}
+
+	return tx.Commit()
+}
+
+// BatchUpdateSeries назначает серию выбранным книгам.
+func (r *BookRepository) BatchUpdateSeries(ctx context.Context, bookIDs []string, seriesName string) error {
+	seriesName = strings.TrimSpace(seriesName)
+	if seriesName == "" || len(bookIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.pool.Writer.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var seriesID string
+	err = tx.GetContext(ctx, &seriesID, `SELECT id FROM series WHERE name = ? LIMIT 1`, seriesName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			seriesID = uuid.NewString()
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO series (id, name, sort_name) VALUES (?, ?, ?)
+			`, seriesID, seriesName, seriesName)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	for idx, bookID := range bookIDs {
+		_, _ = tx.ExecContext(ctx, `DELETE FROM book_series WHERE book_id = ?`, bookID)
+		_, _ = tx.ExecContext(ctx, `
+			INSERT INTO book_series (book_id, series_id, series_index)
+			VALUES (?, ?, ?)
+		`, bookID, seriesID, float64(idx+1))
+	}
+
+	return tx.Commit()
+}
+
+// StorageStats возвращает сводную статистику хранилища и форматов.
+type StorageStats struct {
+	TotalBooks   int            `json:"total_books"`
+	TotalAuthors int            `json:"total_authors"`
+	TotalSeries  int            `json:"total_series"`
+	TotalFiles   int            `json:"total_files"`
+	TotalBytes   int64          `json:"total_bytes"`
+	FormatCounts map[string]int `json:"format_counts"`
+}
+
+// GetStorageStats собирает сводную статистику по книгам, авторам, сериям, файлам и форматам.
+func (r *BookRepository) GetStorageStats(ctx context.Context) (*StorageStats, error) {
+	stats := &StorageStats{
+		FormatCounts: make(map[string]int),
+	}
+
+	_ = r.pool.Reader.GetContext(ctx, &stats.TotalBooks, `SELECT COUNT(*) FROM books`)
+	_ = r.pool.Reader.GetContext(ctx, &stats.TotalAuthors, `SELECT COUNT(*) FROM authors`)
+	_ = r.pool.Reader.GetContext(ctx, &stats.TotalSeries, `SELECT COUNT(*) FROM series`)
+	_ = r.pool.Reader.GetContext(ctx, &stats.TotalFiles, `SELECT COUNT(*) FROM book_files`)
+	_ = r.pool.Reader.GetContext(ctx, &stats.TotalBytes, `SELECT COALESCE(SUM(file_size), 0) FROM book_files`)
+
+	rows, err := r.pool.Reader.QueryxContext(ctx, `SELECT format, COUNT(*) as cnt FROM book_files GROUP BY format`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var format string
+			var cnt int
+			if err := rows.Scan(&format, &cnt); err == nil {
+				stats.FormatCounts[format] = cnt
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+func joinStringsWithComma(items []string) string {
+	var quoted []string
+	for _, item := range items {
+		clean := strings.ReplaceAll(item, "'", "''")
+		quoted = append(quoted, fmt.Sprintf("'%s'", clean))
+	}
+	return strings.Join(quoted, ",")
+}
+
+
