@@ -30,12 +30,13 @@ pnpm-debug.log*
 *.db-shm
 *.sqlite
 *.sqlite3
-data/
-library/
-storage/
-temp/
-tmp/
-backups/
+/data/
+/library/
+/storage/
+/temp/
+/tmp/
+/backups/
+!backend/internal/storage/
 
 # Configs & Secrets
 .env
@@ -62,7 +63,7 @@ desktop.ini
 *~
 
 # Logs
-logs/
+/logs/
 *.log
 
 # Coverage
