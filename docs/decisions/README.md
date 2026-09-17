@@ -10,3 +10,5 @@
 | **02** | [02_db_layer_comparison.md](02_db_layer_comparison.md) | **Утверждено** | Сравнительный анализ слоев работы с SQLite (`sqlx` + SQL миграции vs `GORM` vs `database/sql`). Утвержден `sqlx` + встроенные SQL-миграции (`embed.FS`). |
 | **03** | [03_stage1_implementation_plan.md](03_stage1_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 1: Core Engine, Storage (SQLite WAL+FTS5), парсер FB2/ZIP с любыми кодировками, кеш обложек с LRU и скрипты развертывания `systemd` в WSL2. |
 | **04** | [04_stage1_walkthrough.md](04_stage1_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 1 (тесты, развертывание в WSL2, потребление 5.3 МБ RAM). |
+| **05** | [05_stage2_implementation_plan.md](05_stage2_implementation_plan.md) | **Выполнено** | Детальный план реализации Этапа 2: OPDS v1.2 (Atom/XML), OPDS v2.0 (JSON-LD), навигационные каналы, поиск OpenSearch, авторизация E-Ink и стриминг книг из ZIP. |
+| **06** | [06_stage2_walkthrough.md](06_stage2_walkthrough.md) | **Выполнено** | Отчет о реализации и результатах верификации Этапа 2 (OPDS v1.2, OPDS v2.0, тесты, проверка в WSL2). |

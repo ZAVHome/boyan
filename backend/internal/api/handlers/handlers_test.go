@@ -38,6 +38,7 @@ func TestAPIHandlers(t *testing.T) {
 	}
 
 	bookRepo := storage.NewBookRepository(pool)
+	userRepo := storage.NewUserRepository(pool)
 	coverCache, err := cover.NewCoverCache(coverDir, 10)
 	if err != nil {
 		t.Fatalf("NewCoverCache failed: %v", err)
@@ -51,7 +52,7 @@ func TestAPIHandlers(t *testing.T) {
 	_ = bookRepo.SaveBook(ctx, testBook, nil, nil, nil, nil)
 
 	cfg := config.DefaultConfig()
-	router := api.NewRouter(cfg, pool, bookRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, coverCache)
 
 	// 1. Проверка /health
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

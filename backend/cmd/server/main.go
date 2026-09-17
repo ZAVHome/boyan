@@ -91,7 +91,7 @@ func main() {
 	}
 
 	// 7. Сборка HTTP роутера
-	router := api.NewRouter(cfg, pool, bookRepo, coverCache)
+	router := api.NewRouter(cfg, pool, bookRepo, userRepo, coverCache)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
