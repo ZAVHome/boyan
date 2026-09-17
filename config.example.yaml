@@ -1,0 +1,99 @@
+# ====================================================================
+# Next-Gen OPDS Suite — Example Configuration File
+# Copy to config.yaml and customize for your environment
+# ====================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  base_url: "https://books.example.com" # Used for OPDS feed links and webhook callbacks
+  jwt_secret: "replace-this-with-a-random-32-character-secret-key"
+  jwt_expiration_hours: 168 # 7 days
+  cors_allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    - "https://books.example.com"
+
+# Logging configuration
+logging:
+  level: "info" # debug, info, warn, error
+  format: "text" # text (colored human-readable) or json (production)
+
+# Database settings
+database:
+  driver: "sqlite" # "sqlite" or "postgres"
+  sqlite:
+    path: "./data/opds.db"
+    enable_wal: true
+    busy_timeout_ms: 5000
+    cache_size_kb: 64000
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "opds"
+    password: "secretpassword"
+    dbname: "opds_db"
+    sslmode: "disable"
+
+# Library storage and ingestion
+storage:
+  # Path where the main organized library files reside
+  library_dir: "./library"
+  
+  # Directory monitored for incoming new books and archives
+  watch_dir: "./import"
+  
+  # How files should be arranged inside library_dir:
+  # Available variables: {Author}, {Title}, {Series}, {SeriesIndex}, {BookID}, {ext}
+  # Calibre style: "{Author}/{Title} ({BookID})/{Title} - {Author}.{ext}"
+  # Media style: "{Author}/{Series}/{SeriesIndex:02d} - {Title}.{ext}"
+  path_template: "{Author}/{Series}/{SeriesIndex:02d} - {Title}.{ext}"
+  
+  # Ingestion daemon options
+  watcher:
+    enabled: true
+    settle_delay_seconds: 5 # Wait after last write before parsing archive
+    delete_source_after_import: false # Set true to delete imported archive from watch_dir
+    quarantine_duplicates: true # Send duplicate candidates to review queue
+
+# OPDS Catalog Settings
+opds:
+  title: "Моя Домашняя Библиотека"
+  subtitle: "Электронный каталог книг OPDS v1.2 / v2.0"
+  page_size: 50
+  enable_opds_v1: true # Atom / XML feed for E-Ink (AlReaderX, PocketBook, KOReader)
+  enable_opds_v2: true # JSON-LD feed for modern readers
+  allow_anonymous_reading: false # Require HTTP Basic Auth or token parameter
+  stream_from_zip: true # Stream FB2 files directly out of .zip archives without disk extraction
+
+# External Metadata Providers (Enrichment)
+metadata:
+  auto_enrich_on_import: true
+  providers_priority:
+    - "fantlab"     # FantLab (Best for Russian sci-fi/fantasy series and cycles)
+    - "livelib"     # LiveLib (Covers and general reviews)
+    - "openlibrary" # OpenLibrary (ISBN, international metadata)
+  cache_covers_locally: true
+  cover_thumbnail_size: 400 # Max width/height for generated thumbnails
+  cover_cache_max_mb: 500   # Maximum disk cache size in MB (LRU pruning)
+  cover_cache_dir: "./data/cache/covers"
+
+# Initial admin account setup
+admin:
+  default_username: "admin"
+  default_password: "adminpassword"
+
+# Email delivery (Send-to-Kindle / Send-to-PocketBook)
+smtp:
+  enabled: false
+  host: "smtp.example.com"
+  port: 587
+  username: "library@example.com"
+  password: "smtppassword"
+  from_address: "library@example.com"
+
+# Telegram Bot configuration
+telegram:
+  enabled: false
+  bot_token: "" # Obtained from @BotFather
+  allowed_user_ids: [] # Leave empty to allow anyone with invite code, or list IDs

@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # Core Go Backend (REST API + OPDS v1.2/v2.0 + Ingest Daemon)
+  # -------------------------------------------------------------
+  opds-core:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: opds-suite/core:latest
+    container_name: opds-core
+    restart: unless-stopped
+    environment:
+      - OPDS_SERVER_PORT=8080
+      - OPDS_SERVER_HOST=0.0.0.0
+      - OPDS_DB_DRIVER=sqlite
+      - OPDS_DB_PATH=/app/data/opds.db
+      - OPDS_LIBRARY_DIR=/books
+      - OPDS_WATCH_DIR=/import
+      - OPDS_LOG_LEVEL=info
+      - OPDS_LOG_FORMAT=json
+      - OPDS_JWT_SECRET=${JWT_SECRET:-change-me-super-secret-key-32-bytes}
+    volumes:
+      - ./data:/app/data
+      - ./library:/books
+      - ./import:/import
+      - ./backups:/app/backups
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # -------------------------------------------------------------
+  # Desktop & Tablet Web Frontend (Vue 3 + Tailwind SPA)
+  # -------------------------------------------------------------
+  web-desktop:
+    build:
+      context: ./frontends/web-desktop
+      dockerfile: Dockerfile
+    image: opds-suite/web-desktop:latest
+    container_name: opds-web-desktop
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      opds-core:
+        condition: service_healthy
+
+  # -------------------------------------------------------------
+  # Mobile Touch-First PWA Frontend (Vue 3 + Tailwind PWA)
+  # -------------------------------------------------------------
+  web-mobile:
+    build:
+      context: ./frontends/web-mobile
+      dockerfile: Dockerfile
+    image: opds-suite/web-mobile:latest
+    container_name: opds-web-mobile
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      opds-core:
+        condition: service_healthy
+
+  # -------------------------------------------------------------
+  # Telegram Ingest & Search Bot
+  # -------------------------------------------------------------
+  telegram-bot:
+    build:
+      context: ./services/telegram-bot
+      dockerfile: Dockerfile
+    image: opds-suite/telegram-bot:latest
+    container_name: opds-telegram-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ADMIN_IDS=${TELEGRAM_ADMIN_IDS:-}
+      - OPDS_API_BASE_URL=http://opds-core:8080/api/v1
+      - OPDS_API_TOKEN=${BOT_API_TOKEN:-}
+    depends_on:
+      opds-core:
+        condition: service_healthy
+    # Optional service, comment out or disable if token not provided
+    profiles:
+      - bot
+
+volumes:
+  data:
+  library:
+  import:
+  backups:
