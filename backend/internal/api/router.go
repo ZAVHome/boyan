@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	_ "boyan/docs/swagger"
 	"boyan/internal/api/handlers"
 	customMiddleware "boyan/internal/api/middleware"
 	"boyan/internal/config"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // NewRouter конфигурирует и собирает главный HTTP-роутер приложения на базе go-chi.
@@ -58,6 +60,12 @@ func NewRouter(
 	// REST API v1 ветка
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/ping", healthH.Ping)
+
+		// Swagger UI документация
+		r.Get("/docs/*", httpSwagger.WrapHandler)
+		r.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/api/v1/docs/index.html", http.StatusMovedPermanently)
+		})
 
 		// Аутентификация
 		r.Post("/auth/login", authH.Login)
