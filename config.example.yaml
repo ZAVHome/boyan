@@ -24,6 +24,7 @@ logging:
 database:
   driver: "sqlite" # "sqlite" or "postgres"
   sqlite:
+    # Linux FHS Production: "/var/lib/boyan/data/boyan.db" (StateDirectory)
     path: "./data/opds.db"
     enable_wal: true
     busy_timeout_ms: 5000
@@ -36,12 +37,18 @@ database:
     dbname: "opds_db"
     sslmode: "disable"
 
-# Library storage and ingestion
+# Library storage and ingestion (FHS 3.0 Architecture)
 storage:
-  # Path where the main organized library files reside
+  # Path where the main organized library files reside.
+  # - Development: "./library"
+  # - Linux compact (single drive): "/var/lib/boyan/library"
+  # - Linux dedicated volume / large library (>50GB): "/srv/books" or "/mnt/storage/books"
+  #   (Tip: or mount storage and symlink: ln -s /srv/books /var/lib/boyan/library)
   library_dir: "./library"
   
   # Directory monitored for incoming new books and archives
+  # - Linux compact: "/var/lib/boyan/import"
+  # - Linux dedicated volume: "/srv/books/import"
   watch_dir: "./import"
   
   # How files should be arranged inside library_dir:
@@ -77,6 +84,7 @@ metadata:
   cache_covers_locally: true
   cover_thumbnail_size: 400 # Max width/height for generated thumbnails
   cover_cache_max_mb: 500   # Maximum disk cache size in MB (LRU pruning)
+  # Linux FHS Production: "/var/cache/boyan/covers" (CacheDirectory)
   cover_cache_dir: "./data/cache/covers"
 
 # Initial admin account setup

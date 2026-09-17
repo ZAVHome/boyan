@@ -306,10 +306,10 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/boyan cmd/server/main.go
    ```
 
-2. **Directory Structure Setup:**
+2. **Directory Structure Setup (FHS 3.0 Standard):**
 
    ```bash
-   sudo mkdir -p /opt/boyan /var/lib/boyan /var/cache/boyan/covers /var/books
+   sudo mkdir -p /opt/boyan /var/lib/boyan/data /var/lib/boyan/library /var/lib/boyan/import /var/lib/boyan/quarantine /var/cache/boyan/covers
    sudo cp ../bin/boyan /opt/boyan/boyan
    sudo cp ../config.example.yaml /opt/boyan/config.yaml
    ```
@@ -323,11 +323,18 @@ The Telegram daemon (`boyan/internal/telegram`) communicates directly with the T
 
    [Service]
    Type=simple
-   User=root
+   User=boyan
+   Group=boyan
    WorkingDirectory=/opt/boyan
    ExecStart=/opt/boyan/boyan --config /opt/boyan/config.yaml
    Restart=always
-   RestartSec=5
+   RestartSec=3s
+   StateDirectory=boyan
+   CacheDirectory=boyan
+   ProtectSystem=full
+   ProtectHome=true
+   NoNewPrivileges=true
+   PrivateTmp=true
    LimitNOFILE=65535
 
    [Install]

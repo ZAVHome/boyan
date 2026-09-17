@@ -42,11 +42,13 @@
    - Если сервер поддерживает IPv6, добавьте запись `AAAA` с IPv6-адресом сервера.
 
 3. **Проверьте применение DNS:**
+
    ```bash
    dig +short books.MYDOMAIN.COM
    # или
    nslookup books.MYDOMAIN.COM
    ```
+
    Ответом должен быть IP-адрес вашего VPS.
 
 ---
@@ -105,17 +107,19 @@ sudo bash install.sh books.MYDOMAIN.COM
 **Что делает автоматический инсталлятор `install.sh`:**
 
 1. Создает изолированного системного пользователя `boyan` без прав входа в шелл.
-2. Создает структуру каталогов:
+2. Создает структуру каталогов по стандарту FHS 3.0:
    - `/opt/boyan` — бинарник сервера и конфигурация `config.yaml`.
    - `/var/lib/boyan/data` — база данных SQLite 3 в режиме WAL.
    - `/var/lib/boyan/library` — постоянное хранилище книг.
    - `/var/lib/boyan/import` — папка мониторинга для автоматического импорта новых книг.
+   - `/var/lib/boyan/quarantine` — папка карантина дубликатов.
    - `/var/cache/boyan/covers` — LRU-кэш обложек.
    - `/var/www/boyan/web-desktop` — статика десктопного фронтенда.
    - `/var/www/boyan/web-mobile` — статика мобильного PWA-ридера.
-3. Устанавливает и запускает службу `systemd` (`boyan.service`).
-4. Настраивает виртуальный хост Nginx (`/etc/nginx/sites-available/boyan`) с проксированием и поддержкой ACME challenge для вашего субдомена.
-5. Автоматически запускает Certbot для выпуска бесплатного SSL-сертификата **Let's Encrypt** и перенаправления на **HTTPS**.
+3. Генерирует уникальный криптостойкий `jwt_secret` и пароль БД, привязывает сервис к `127.0.0.1` и прописывает ваш субдомен в `base_url` и `cors_allowed_origins`.
+4. Устанавливает и запускает службу `systemd` (`boyan.service`).
+5. Настраивает виртуальный хост Nginx (`/etc/nginx/sites-available/boyan`) с проксированием и поддержкой ACME challenge для вашего субдомена.
+6. Автоматически запускает Certbot для выпуска бесплатного SSL-сертификата **Let's Encrypt** и перенаправления на **HTTPS**.
 
 ---
 
@@ -169,17 +173,39 @@ server:
 
 database:
   driver: "sqlite"
+  # Стандарт FHS 3.0 (StateDirectory): база данных и служебное состояние
   path: "/var/lib/boyan/data/boyan.db"
 
 storage:
+  # Хранилище книг (для компактных установок: /var/lib/boyan/library)
+  # Для больших коллекций (>50 ГБ): путь к смонтированному диску (например, /srv/books)
   library_dir: "/var/lib/boyan/library"
   watch_dir: "/var/lib/boyan/import"
-  quarantine_dir: "/var/lib/boyan/data/quarantine"
+  quarantine_dir: "/var/lib/boyan/quarantine"
 
-covers:
-  cache_dir: "/var/cache/boyan/covers"
-  max_cache_mb: 256
+metadata:
+  # Стандарт FHS 3.0 (CacheDirectory): кэш сгенерированных обложек
+  cover_cache_dir: "/var/cache/boyan/covers"
+  cover_cache_max_mb: 500
 ```
+
+> [!TIP]
+> **Подключение внешнего диска / тома (Volume) для больших библиотек:**
+> Если ваш книжный фонд занимает от десятков гигабайт до терабайта, чтобы не переполнять системный корневой раздел `/var`, смонтируйте отдельный диск в `/srv/books` (или `/mnt/storage/books`) и назначьте права пользователю `boyan`:
+>
+> ```bash
+> sudo mkdir -p /srv/books
+> sudo chown -R boyan:boyan /srv/books
+> sudo chmod -R 755 /srv/books
+> ```
+>
+> Затем в `/opt/boyan/config.yaml` укажите `library_dir: "/srv/books"`, либо создайте символическую ссылку:
+>
+> ```bash
+> sudo ln -s /srv/books /var/lib/boyan/library
+> ```
+>
+> Подробнее об архитектурном разделении State и Content см. в [ADR-16](decisions/16_linux_storage_fhs_architecture.md).
 
 ### 4. Размещение статики фронтендов
 
@@ -259,27 +285,52 @@ upstream boyan_backend {
     keepalive 32;
 }
 
+# 1. HTTP Server (Порт 80) — Исключительно ACME-валидация и 301-редирект на HTTPS
 server {
     listen 80;
     listen [::]:80;
-    
-    # Выделенный субдомен вашей библиотеки
     server_name books.MYDOMAIN.COM;
-
-    client_max_body_size 200M;
 
     # Валидация сертификатов Let's Encrypt (Certbot ACME challenge)
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
-    # Gzip сжатие
+    # Все запросы принудительно перенаправляются на HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# 2. HTTPS Server (Порт 443) — Вся работа комплекса «Боян»
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name books.MYDOMAIN.COM;
+
+    # Пути к сертификатам (Let's Encrypt или заранее выпущенным)
+    ssl_certificate /etc/letsencrypt/live/books.MYDOMAIN.COM/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/books.MYDOMAIN.COM/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    client_max_body_size 200M;
+
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
     gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
 
-    # 1. Проксирование Backend API и OPDS каталогов
+    # 2.1. Проксирование Backend API и OPDS каталогов
     location ~ ^/(api|opds|covers|health) {
         proxy_pass http://boyan_backend;
         proxy_http_version 1.1;
@@ -287,7 +338,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -298,7 +349,7 @@ server {
         proxy_buffering off;
     }
 
-    # 2. Мобильное PWA-приложение (/m/)
+    # 2.2. Мобильное PWA-приложение (/m/)
     location /m/ {
         alias /var/www/boyan/web-mobile/;
         try_files $uri $uri/ /m/index.html;
@@ -314,7 +365,7 @@ server {
         }
     }
 
-    # 3. Десктопное веб-приложение (/)
+    # 2.3. Десктопное веб-приложение (/)
     location / {
         root /var/www/boyan/web-desktop;
         index index.html;
@@ -338,27 +389,46 @@ sudo systemctl reload nginx
 
 ---
 
-### 8. Бесплатный SSL-сертификат Let's Encrypt (HTTPS)
+### 8. Настройка SSL/TLS (HTTPS) и поддержка заранее выпущенных сертификатов
 
-Для того чтобы PWA-приложение работало автономно и сохраняло книги в офлайн (Service Worker Cache API), а читалки безопасно синхронизировались по OPDS, **HTTPS строго обязателен**.
+Для того чтобы PWA-приложение работало автономно и сохраняло книги в офлайн (Service Worker Cache API), а читалки безопасно синхронизировались по OPDS, **HTTPS строго обязателен**. Сервер работает исключительно по защищенному протоколу HTTPS (порт 443), а порт 80 выполняет только ACME-валидацию и 301-редирект.
 
-Выпустите сертификат с автоматической настройкой Nginx:
+Поддерживаются три сценария работы с сертификатами:
 
+#### Вариант А: Заранее выпущенный сертификат (Pre-issued Certificate)
+Если вы используете Wildcard-сертификат (выпущенный по DNS-01), корпоративный CA или коммерческий сертификат:
+1. Разместите файлы сертификата на сервере, например в `/etc/ssl/boyan/`:
+   ```bash
+   sudo mkdir -p /etc/ssl/boyan
+   sudo cp fullchain.pem /etc/ssl/boyan/fullchain.pem
+   sudo cp privkey.pem /etc/ssl/boyan/privkey.pem
+   sudo chmod 600 /etc/ssl/boyan/privkey.pem
+   ```
+2. Установщик `install.sh` автоматически обнаружит эти файлы и применит их без обращения к Certbot. При ручной настройке укажите пути к ним в блоке `server` (порт 443) в файле `/etc/nginx/sites-available/boyan`.
+
+#### Вариант Б: Автоматический выпуск через Let's Encrypt (Certbot Webroot)
+Если у вас стандартный домен и A-запись указывает на ваш VPS:
 ```bash
-sudo certbot --nginx -d books.MYDOMAIN.COM
+sudo mkdir -p /var/www/html
+sudo certbot certonly --webroot -w /var/www/html -d books.MYDOMAIN.COM
 ```
-
-**Что делает Certbot:**
-1. Подключается к удостоверяющему центру Let's Encrypt и проверяет владение субдоменом через ACME challenge.
-2. Генерирует доверенный SSL/TLS сертификат (`/etc/letsencrypt/live/books.MYDOMAIN.COM/`).
-3. Автоматически вносит в `/etc/nginx/sites-available/boyan` директивы SSL (порт 443) и настраивает перенаправление (301 Redirect) всех HTTP-запросов на HTTPS.
-4. Регистрирует системный таймер `certbot.timer` для автоматического продления сертификата каждые 60 дней.
+Сертификат будет сохранен в `/etc/letsencrypt/live/books.MYDOMAIN.COM/`. Nginx сохраняет чистую конфигурацию без модификаций со стороны Certbot.
 
 Проверка автоматического продления сертификата:
-
 ```bash
 sudo certbot renew --dry-run
 ```
+
+#### Вариант В: Самоподписанный сертификат (Локальное или тестовое окружение)
+Для запуска и тестирования в закрытой сети или до делегирования домена:
+```bash
+sudo mkdir -p /etc/ssl/boyan
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/boyan/privkey.pem \
+    -out /etc/ssl/boyan/fullchain.pem \
+    -subj "/CN=books.MYDOMAIN.COM"
+```
+Скрипт `install.sh` генерирует данный сертификат автоматически в случае отсутствия реального домена или недоступности Certbot.
 
 ---
 
@@ -470,7 +540,20 @@ sqlite3 /var/lib/boyan/data/boyan.db ".backup '/var/lib/boyan/data/boyan_backup_
 
 ### Обновление на новую версию «Бояна»
 
-Благодаря внешней сборке обновление сервера занимает менее 10 секунд:
+Благодаря идемпотентности инсталлятора и внешней сборке, обновление сервера занимает считанные секунды:
+
+**Вариант А (Автоматический через `install.sh`):**
+
+```bash
+# Распакуйте новый релиз и запустите инсталлятор:
+tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-new/
+cd /tmp/boyan-new
+sudo bash install.sh
+```
+
+*Скрипт автоматически определит ваш текущий домен из `config.yaml`, обновит исполняемый файл и веб-интерфейсы, сохранит в целости все ваши настройки, базу данных, книги и активный SSL-сертификат, после чего перезапустит службу.*
+
+**Вариант Б (Вручную):**
 
 ```bash
 # 1. Распакуйте новый архив

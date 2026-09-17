@@ -103,17 +103,19 @@ sudo bash install.sh books.MYDOMAIN.COM
 **What `install.sh` handles automatically:**
 
 1. Provisions an isolated unprivileged system user `boyan`.
-2. Creates the directory hierarchy:
+2. Creates the directory hierarchy (FHS 3.0 standard):
    - `/opt/boyan` — Server executable and `config.yaml`.
    - `/var/lib/boyan/data` — SQLite 3 WAL database.
    - `/var/lib/boyan/library` — Persistent book storage.
    - `/var/lib/boyan/import` — Auto-ingestion watch folder.
+   - `/var/lib/boyan/quarantine` — Duplicate & corrupted book quarantine.
    - `/var/cache/boyan/covers` — In-memory LRU cover cache.
    - `/var/www/boyan/web-desktop` — Desktop web app static files.
    - `/var/www/boyan/web-mobile` — Mobile PWA reader static files.
-3. Registers and starts the `systemd` service (`boyan.service`).
-4. Configures the Nginx reverse proxy virtual host (`/etc/nginx/sites-available/boyan`) tailored for `books.MYDOMAIN.COM`.
-5. Prompts to automatically obtain a free **Let's Encrypt SSL certificate** and enable HTTPS redirection.
+3. Automatically generates cryptographically secure unique `jwt_secret` and database passwords, binds service to `127.0.0.1`, and updates `base_url` & `cors_allowed_origins` with your domain.
+4. Registers and starts the `systemd` service (`boyan.service`).
+5. Configures the Nginx reverse proxy virtual host (`/etc/nginx/sites-available/boyan`) tailored for `books.MYDOMAIN.COM`.
+6. Prompts to automatically obtain a free **Let's Encrypt SSL certificate** and enable HTTPS redirection.
 
 ---
 
@@ -161,17 +163,39 @@ server:
 
 database:
   driver: "sqlite"
+  # Linux FHS 3.0 Standard (StateDirectory): SQLite DB & persistent state
   path: "/var/lib/boyan/data/boyan.db"
 
 storage:
+  # Book repository (compact single-disk setup: /var/lib/boyan/library)
+  # For large collections (>50 GB): path to mounted storage volume (e.g., /srv/books)
   library_dir: "/var/lib/boyan/library"
   watch_dir: "/var/lib/boyan/import"
-  quarantine_dir: "/var/lib/boyan/data/quarantine"
+  quarantine_dir: "/var/lib/boyan/quarantine"
 
-covers:
-  cache_dir: "/var/cache/boyan/covers"
-  max_cache_mb: 256
+metadata:
+  # Linux FHS 3.0 Standard (CacheDirectory): generated thumbnail cache
+  cover_cache_dir: "/var/cache/boyan/covers"
+  cover_cache_max_mb: 500
 ```
+
+> [!TIP]
+> **Connecting External Block Storage / Dedicated Volumes for Large Libraries:**
+> If your eBook collection ranges from tens of gigabytes to terabytes, avoid filling your system root disk (`/var`). Mount a dedicated volume to `/srv/books` (or `/mnt/storage/books`) and assign ownership to `boyan`:
+>
+> ```bash
+> sudo mkdir -p /srv/books
+> sudo chown -R boyan:boyan /srv/books
+> sudo chmod -R 755 /srv/books
+> ```
+>
+> Then specify `library_dir: "/srv/books"` in `/opt/boyan/config.yaml`, or create a symlink:
+>
+> ```bash
+> sudo ln -s /srv/books /var/lib/boyan/library
+> ```
+>
+> For detailed FHS architectural specifications, see [ADR-16](decisions/16_linux_storage_fhs_architecture.md).
 
 ### 4. Deploy Frontend Static Assets
 
@@ -245,27 +269,52 @@ upstream boyan_backend {
     keepalive 32;
 }
 
+# 1. HTTP Server (Port 80) — Strictly ACME challenge validation & 301 redirect to HTTPS
 server {
     listen 80;
     listen [::]:80;
-    
-    # Dedicated subdomain for Boyan
     server_name books.MYDOMAIN.COM;
-
-    client_max_body_size 200M;
 
     # Let's Encrypt ACME challenge validation
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
-    # Gzip compression
+    # Redirect all HTTP requests to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# 2. HTTPS Server (Port 443) — All Boyan Services
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name books.MYDOMAIN.COM;
+
+    # Certificate paths (Let's Encrypt or pre-issued)
+    ssl_certificate /etc/letsencrypt/live/books.MYDOMAIN.COM/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/books.MYDOMAIN.COM/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    client_max_body_size 200M;
+
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
     gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
 
-    # 1. Reverse Proxy API & OPDS endpoints
+    # 2.1. Reverse Proxy API & OPDS endpoints
     location ~ ^/(api|opds|covers|health) {
         proxy_pass http://boyan_backend;
         proxy_http_version 1.1;
@@ -273,7 +322,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -284,7 +333,7 @@ server {
         proxy_buffering off;
     }
 
-    # 2. Mobile Touch PWA reader (/m/)
+    # 2.2. Mobile Touch PWA reader (/m/)
     location /m/ {
         alias /var/www/boyan/web-mobile/;
         try_files $uri $uri/ /m/index.html;
@@ -300,7 +349,7 @@ server {
         }
     }
 
-    # 3. Desktop Web App (/)
+    # 2.3. Desktop Web App (/)
     location / {
         root /var/www/boyan/web-desktop;
         index index.html;
@@ -324,28 +373,57 @@ sudo systemctl reload nginx
 
 ---
 
-### 8. Enable Let's Encrypt HTTPS (SSL)
+### 8. SSL/TLS (HTTPS) Setup & Pre-issued Certificates
 
-HTTPS is strictly mandatory for Service Workers, IndexedDB offline book storage in PWA, and secure remote OPDS feed syncing.
+HTTPS is strictly mandatory for Service Workers, IndexedDB offline book storage in PWA, and secure remote OPDS feed syncing. Boyan operates exclusively over secure HTTPS (port 443), with port 80 performing only ACME validation and 301 redirection.
 
-Request a certificate and automatically configure Nginx:
+Three certificate scenarios are supported:
+
+#### Option A: Pre-issued Certificate
+
+If using a Wildcard certificate (issued via DNS-01), enterprise CA, or commercial certificate:
+
+1. Place certificate files on the server, for instance in `/etc/ssl/boyan/`:
+
+   ```bash
+   sudo mkdir -p /etc/ssl/boyan
+   sudo cp fullchain.pem /etc/ssl/boyan/fullchain.pem
+   sudo cp privkey.pem /etc/ssl/boyan/privkey.pem
+   sudo chmod 600 /etc/ssl/boyan/privkey.pem
+   ```
+
+2. The `install.sh` script automatically detects existing certificates and activates HTTPS without running Certbot. In manual setup, specify these paths in `/etc/nginx/sites-available/boyan`.
+
+#### Option B: Automatic Issuance via Let's Encrypt (Certbot Webroot)
+
+If using a standard public domain with DNS A-record pointing to your VPS:
 
 ```bash
-sudo certbot --nginx -d books.MYDOMAIN.COM
+sudo mkdir -p /var/www/html
+sudo certbot certonly --webroot -w /var/www/html -d books.MYDOMAIN.COM
 ```
 
-**What Certbot does:**
+The certificate will be saved to `/etc/letsencrypt/live/books.MYDOMAIN.COM/`. Nginx retains its clean configuration without intrusive modifications.
 
-1. Validates domain control for `books.MYDOMAIN.COM` with Let's Encrypt via HTTP-01 ACME challenge.
-2. Generates trusted TLS certificates at `/etc/letsencrypt/live/books.MYDOMAIN.COM/`.
-3. Modifies `/etc/nginx/sites-available/boyan` to configure port 443 SSL directives and creates an automatic 301 HTTP-to-HTTPS redirect.
-4. Registers `certbot.timer` systemd timer for automatic renewals every 60 days.
-
-Verify auto-renewal:
+Verify automatic renewal:
 
 ```bash
 sudo certbot renew --dry-run
 ```
+
+#### Option C: Self-Signed Certificate (Local / Staging Environment)
+
+For private networking or testing before DNS propagation:
+
+```bash
+sudo mkdir -p /etc/ssl/boyan
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/boyan/privkey.pem \
+    -out /etc/ssl/boyan/fullchain.pem \
+    -subj "/CN=books.MYDOMAIN.COM"
+```
+
+The installer generates this fallback certificate automatically if no valid certificate is available.
 
 ---
 
@@ -456,15 +534,31 @@ Add a daily cron job (`crontab -e`):
 
 ### Updating Boyan
 
-Because of the zero-build release package, updating takes under 10 seconds:
+Thanks to the idempotent installer and zero-build packaging, updating takes only seconds:
+
+**Method A (Automatic with `install.sh`):**
 
 ```bash
+# Extract the new release and run the installer:
+tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-new/
+cd /tmp/boyan-new
+sudo bash install.sh
+```
+
+*The script automatically detects your active domain from `config.yaml`, updates binaries and web interfaces, preserves your settings, database, books, and active SSL certificates, and restarts the service.*
+
+**Method B (Manual):**
+
+```bash
+# 1. Extract package
 tar -xzf /tmp/boyan-linux-amd64.tar.gz -C /tmp/boyan-new/
 
+# 2. Update binary and web assets
 sudo cp /tmp/boyan-new/boyan /opt/boyan/boyan
 sudo cp -r /tmp/boyan-new/web-desktop/* /var/www/boyan/web-desktop/
 sudo cp -r /tmp/boyan-new/web-mobile/* /var/www/boyan/web-mobile/
 
+# 3. Restart service
 sudo systemctl restart boyan
 ```
 

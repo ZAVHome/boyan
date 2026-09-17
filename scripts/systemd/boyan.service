@@ -12,6 +12,10 @@ Restart=always
 RestartSec=3s
 LimitNOFILE=65535
 
+# FHS директории состояния и кэша (/var/lib/boyan и /var/cache/boyan)
+StateDirectory=boyan
+CacheDirectory=boyan
+
 # Защита и изоляция процесса
 ProtectSystem=full
 ProtectHome=true
