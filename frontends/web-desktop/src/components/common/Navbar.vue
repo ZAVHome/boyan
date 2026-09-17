@@ -49,9 +49,11 @@ function handleAuthAction() {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
       <!-- Логотип и название -->
       <router-link to="/" class="flex items-center gap-3 shrink-0 group focus:outline-none">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-accent to-indigo-500 flex items-center justify-center text-white shadow-md shadow-accent/20 group-hover:scale-105 transition-transform">
-          <BookOpen class="w-5 h-5" />
-        </div>
+        <img
+          src="/logo.png"
+          alt="Боян"
+          class="w-10 h-10 rounded-full object-cover shadow-md shadow-amber-900/20 group-hover:scale-105 transition-transform"
+        />
         <div>
           <span class="text-xl font-bold tracking-tight text-fg-primary block leading-none group-hover:text-accent transition-colors">
             {{ t('app.title') }}

@@ -8,7 +8,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt'],
+      includeAssets: ['favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png', 'robots.txt'],
       manifest: {
         name: 'Боян — Мобильная читалка и библиотека',
         short_name: 'Боян',
@@ -27,6 +27,12 @@ export default defineConfig({
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: '/pwa-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },

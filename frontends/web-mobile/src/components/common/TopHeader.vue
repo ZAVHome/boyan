@@ -13,9 +13,11 @@
       </button>
 
       <div class="flex items-center gap-2" v-if="!title">
-        <div class="w-7 h-7 rounded-lg bg-primary-600 text-white flex items-center justify-center shadow-sm font-bold text-sm">
-          Б
-        </div>
+        <img
+          src="/logo.png"
+          alt="Боян"
+          class="w-7 h-7 rounded-full object-cover shadow-sm"
+        />
         <span class="font-bold tracking-tight text-base text-theme-text">БОЯН</span>
       </div>
 

@@ -23,6 +23,7 @@ yarn-error.log*
 pnpm-debug.log*
 .pnpm-debug.log*
 .vite/
+*.timestamp-*.mjs
 
 # Databases & Runtime Data
 *.db
@@ -71,3 +72,6 @@ desktop.ini
 coverage.txt
 coverage.html
 .nyc_output/
+
+# Media
+media/
