@@ -100,6 +100,19 @@ def generate_all():
     # Сохранение логотипа в docs/assets
     logo_512.save(DOCS_ASSETS / "logo.png", "PNG", optimize=True)
 
+    # Сохранение копий мастер-ассетов прямо в media/ для удобного доступа
+    round_logo.save(MEDIA_DIR / "Boyan_logo_round_2048.png", "PNG", optimize=True)
+    logo_512.save(MEDIA_DIR / "Boyan_logo_512.png", "PNG", optimize=True)
+    logo_256.save(MEDIA_DIR / "Boyan_logo_256.png", "PNG", optimize=True)
+    maskable_512.save(MEDIA_DIR / "Boyan_pwa_maskable_512.png", "PNG", optimize=True)
+    logo_48.save(
+        MEDIA_DIR / "favicon.ico",
+        format="ICO",
+        sizes=[(16, 16), (32, 32), (48, 48)],
+        append_images=[logo_32, logo_16]
+    )
+    print("  -> Мастер-ассеты сохранены в media/ (Boyan_logo_round_2048.png, Boyan_logo_512.png, favicon.ico и др.)")
+
     print("\n2. Обработка широкого баннера (Boyan_full.jpg)...")
     src_banner = Image.open(full_path).convert("RGB")
     
@@ -113,6 +126,10 @@ def generate_all():
     banner_resized.save(banner_out, "JPEG", quality=85, optimize=True, progressive=True)
     banner_size_kb = os.path.getsize(banner_out) / 1024
     print(f"  -> docs/assets/banner.jpg сохранен ({target_w}x{target_h}, {banner_size_kb:.1f} KB)")
+
+    # Сохранение оптимизированного баннера также в media/
+    banner_resized.save(MEDIA_DIR / "Boyan_banner_1920.jpg", "JPEG", quality=85, optimize=True, progressive=True)
+    print("  -> media/Boyan_banner_1920.jpg сохранен")
 
     print("\nГенерация всех веб-ассетов успешно завершена!")
 
