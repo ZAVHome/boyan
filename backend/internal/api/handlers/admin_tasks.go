@@ -99,6 +99,10 @@ func (h *AdminTasksHandler) RunScan(w http.ResponseWriter, r *http.Request) {
 
 	task, taskCtx := h.taskManager.CreateTask(context.Background(), "scan_library", 0)
 	h.taskManager.StartTask(task.ID)
+	snapshot, err := h.taskManager.GetTask(task.ID)
+	if err != nil {
+		snapshot = task
+	}
 
 	go func(taskID, dir string, ctx context.Context) {
 		err := h.watcher.ScanDirectoryWithProgress(ctx, dir, func(processed, total int, currentItem string, err error) {
@@ -119,7 +123,7 @@ func (h *AdminTasksHandler) RunScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}(task.ID, scanDir, taskCtx)
 
-	writeJSON(w, http.StatusAccepted, task)
+	writeJSON(w, http.StatusAccepted, snapshot)
 }
 
 // RunRepairFB2 запускает фоновую задачу инспекции и санитизации всех FB2-файлов в библиотеке.
@@ -138,6 +142,10 @@ func (h *AdminTasksHandler) RunRepairFB2(w http.ResponseWriter, r *http.Request)
 
 	task, taskCtx := h.taskManager.CreateTask(context.Background(), "repair_fb2", len(fb2Files))
 	h.taskManager.StartTask(task.ID)
+	snapshot, err := h.taskManager.GetTask(task.ID)
+	if err != nil {
+		snapshot = task
+	}
 
 	go func(taskID string, files []models.BookFile, bgCtx context.Context) {
 		total := len(files)
@@ -187,7 +195,7 @@ func (h *AdminTasksHandler) RunRepairFB2(w http.ResponseWriter, r *http.Request)
 		h.taskManager.CompleteTask(taskID, resultMsg)
 	}(task.ID, fb2Files, taskCtx)
 
-	writeJSON(w, http.StatusAccepted, task)
+	writeJSON(w, http.StatusAccepted, snapshot)
 }
 
 func calculateFileHash(filePath string) (string, error) {

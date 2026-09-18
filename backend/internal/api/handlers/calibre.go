@@ -66,6 +66,10 @@ func (h *CalibreHandler) ImportCalibre(w http.ResponseWriter, r *http.Request) {
 	// Регистрация и запуск задачи в TaskManager
 	task, taskCtx := h.taskManager.CreateTask(context.Background(), "import_calibre", 0)
 	h.taskManager.StartTask(task.ID)
+	snapshot, err := h.taskManager.GetTask(task.ID)
+	if err != nil {
+		snapshot = task
+	}
 
 	go func(taskID, p string, opts calibre.ImportOptions, ctx context.Context) {
 		stats, err := h.importer.ImportLibraryWithProgress(ctx, p, opts, func(processed, total int, currentItem string, err error) {
@@ -87,5 +91,5 @@ func (h *CalibreHandler) ImportCalibre(w http.ResponseWriter, r *http.Request) {
 		}
 	}(task.ID, req.Path, calibre.ImportOptions{CopyFiles: req.CopyFiles}, taskCtx)
 
-	writeJSON(w, http.StatusAccepted, task)
+	writeJSON(w, http.StatusAccepted, snapshot)
 }

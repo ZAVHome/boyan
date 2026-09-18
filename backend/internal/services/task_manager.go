@@ -178,6 +178,18 @@ func (m *TaskManager) CancelTask(id string) bool {
 	return false
 }
 
+func (t *Task) clone() *Task {
+	if t == nil {
+		return nil
+	}
+	cp := *t
+	if t.Errors != nil {
+		cp.Errors = make([]string, len(t.Errors))
+		copy(cp.Errors, t.Errors)
+	}
+	return &cp
+}
+
 // GetTask возвращает копию состояния задачи.
 func (m *TaskManager) GetTask(id string) (*Task, error) {
 	m.mu.RLock()
@@ -188,8 +200,7 @@ func (m *TaskManager) GetTask(id string) (*Task, error) {
 		return nil, fmt.Errorf("task not found")
 	}
 
-	copied := *t
-	return &copied, nil
+	return t.clone(), nil
 }
 
 // ListTasks возвращает список недавних задач.
@@ -205,8 +216,7 @@ func (m *TaskManager) ListTasks(limit int) []*Task {
 	for i := 0; i < limit; i++ {
 		taskID := m.order[i]
 		if t, ok := m.tasks[taskID]; ok {
-			copied := *t
-			res = append(res, &copied)
+			res = append(res, t.clone())
 		}
 	}
 	return res
