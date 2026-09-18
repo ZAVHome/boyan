@@ -399,13 +399,13 @@ async function handleBatchRegenerateCovers() {
                     <RefreshCw class="w-4 h-4" />
                   </button>
                   <!-- Редактировать -->
-                  <button
-                    @click="openEditModal(b)"
-                    class="p-1.5 rounded-lg hover:bg-bg-hover text-fg-secondary hover:text-fg-primary"
+                  <router-link
+                    :to="{ name: 'admin-book-edit', params: { id: b.id } }"
+                    class="p-1.5 rounded-lg hover:bg-bg-hover text-fg-secondary hover:text-fg-primary inline-flex items-center justify-center"
                     :title="t('admin.books.action_edit')"
                   >
                     <Edit2 class="w-4 h-4" />
-                  </button>
+                  </router-link>
                   <!-- Удалить -->
                   <button
                     @click="openDeleteModal(b)"

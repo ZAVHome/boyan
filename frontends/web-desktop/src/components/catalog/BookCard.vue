@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { Book } from '@/api/types'
 import { useI18n } from 'vue-i18n'
-import { BookOpen, FileText } from 'lucide-vue-next'
+import { BookOpen } from 'lucide-vue-next'
 
 const props = defineProps<{
   book: Book
@@ -15,11 +16,24 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const imgError = ref(false)
 
 const coverUrl = computed(() => {
   if (imgError.value) return ''
   return api.getCoverUrl(props.book.id)
+})
+
+const primarySeries = computed(() => {
+  return props.book.series && props.book.series.length > 0 ? props.book.series[0] : null
+})
+
+const seriesSummary = computed(() => {
+  if (primarySeries.value) {
+    const s = primarySeries.value
+    return s.index ? `#${s.index} в ${s.name}` : s.name
+  }
+  return ''
 })
 
 const authorSummary = computed(() => {
@@ -29,18 +43,18 @@ const authorSummary = computed(() => {
   return t('catalog.author_unknown')
 })
 
-const seriesSummary = computed(() => {
-  if (props.book.series && props.book.series.length > 0) {
-    const s = props.book.series[0]
-    return s.index ? `#${s.index} в ${s.name}` : s.name
-  }
-  return ''
-})
-
 const availableFormats = computed(() => {
   if (!props.book.files) return []
   return props.book.files.map(f => f.format.toUpperCase())
 })
+
+function goToSeries(seriesId: string) {
+  router.push({ path: '/series', query: { id: seriesId } })
+}
+
+function goToAuthor(authorId: string) {
+  router.push({ path: '/authors', query: { id: authorId } })
+}
 </script>
 
 <template>
@@ -97,16 +111,36 @@ const availableFormats = computed(() => {
     <!-- Метаданные книги -->
     <div class="flex-1 flex flex-col justify-between">
       <div>
-        <span v-if="seriesSummary" class="text-[11px] font-semibold text-accent block truncate mb-0.5">
-          {{ seriesSummary }}
-        </span>
+        <div v-if="primarySeries" class="text-[11px] font-semibold text-accent block truncate mb-0.5">
+          <button
+            type="button"
+            @click.stop="goToSeries(primarySeries.id)"
+            class="hover:underline hover:text-accent-hover text-left truncate max-w-full inline-block"
+            :title="`Перейти к серии: ${primarySeries.name}`"
+          >
+            {{ seriesSummary }}
+          </button>
+        </div>
         <h3 class="font-semibold text-sm text-fg-primary line-clamp-2 leading-tight group-hover:text-accent transition-colors" :title="book.title">
           {{ book.title }}
         </h3>
       </div>
-      <p class="text-xs text-fg-secondary mt-1.5 truncate">
-        {{ authorSummary }}
-      </p>
+      <div class="text-xs text-fg-secondary mt-1.5 truncate">
+        <span v-if="book.authors && book.authors.length > 0">
+          <span v-for="(a, idx) in book.authors" :key="a.id || idx">
+            <button
+              type="button"
+              @click.stop="goToAuthor(a.id)"
+              class="hover:text-accent hover:underline inline"
+              :title="`Перейти к автору: ${a.name}`"
+            >
+              {{ a.name }}
+            </button>
+            <span v-if="idx < book.authors.length - 1" class="text-fg-muted mr-1">, </span>
+          </span>
+        </span>
+        <span v-else class="text-fg-muted">{{ t('catalog.author_unknown') }}</span>
+      </div>
     </div>
   </div>
 </template>

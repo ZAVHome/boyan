@@ -42,6 +42,7 @@ const themeOptions = computed(() => [
 const book = ref<Book | null>(null)
 const loading = ref(true)
 const loadingText = ref('Загрузка книги...')
+const errorMessage = ref('')
 const activeFormat = ref<'fb2' | 'epub' | 'unsupported'>('fb2')
 
 // Содержание и навигация
@@ -74,11 +75,13 @@ let saveProgressTimeout: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   try {
+    errorMessage.value = ''
     book.value = await api.get<Book>(`/api/v1/books/${props.bookId}`)
     await loadInitialProgress()
     await initReader()
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to init book reader:', err)
+    errorMessage.value = err?.message || 'Не удалось открыть книгу'
   } finally {
     loading.value = false
   }
@@ -134,6 +137,16 @@ async function loadFb2Book(isZip: boolean) {
   const url = api.getDownloadUrl(props.bookId, fmt)
 
   const response = await fetch(url)
+  if (!response.ok) {
+    let msg = `Не удалось загрузить книгу (${response.status})`
+    try {
+      const errData = await response.json()
+      if (errData.error) msg = errData.error
+    } catch {
+      // response is not json
+    }
+    throw new Error(msg)
+  }
   const buffer = await response.arrayBuffer()
 
   let fb2XmlText = ''
@@ -146,7 +159,7 @@ async function loadFb2Book(isZip: boolean) {
         entryName = path
       }
     })
-    if (!entryName) throw new Error('No .fb2 file in archive')
+    if (!entryName) throw new Error('В архиве не найден файл .fb2')
     const uint8 = await zip.file(entryName)!.async('uint8array')
     fb2XmlText = decodeXmlBytes(uint8)
   } else {
@@ -165,16 +178,71 @@ function decodeXmlBytes(bytes: Uint8Array): string {
     encoding = match[1].toLowerCase()
   }
 
+  let text = ''
   try {
-    return new TextDecoder(encoding).decode(bytes)
+    text = new TextDecoder(encoding).decode(bytes)
   } catch {
-    return new TextDecoder('utf-8').decode(bytes)
+    text = new TextDecoder('utf-8').decode(bytes)
   }
+
+  return sanitizeFb2Xml(text)
+}
+
+function sanitizeFb2Xml(xmlText: string): string {
+  // 1. Очищаем пробелы и UTF-8 BOM (\uFEFF) перед <?xml
+  xmlText = xmlText.trimStart()
+  if (xmlText.charCodeAt(0) === 0xFEFF) {
+    xmlText = xmlText.slice(1).trimStart()
+  }
+
+  // 2. Убеждаемся, что стандартные namespace FB2 объявлены на корневом теге FictionBook.
+  // В книгах Calibre и старых редакторах часто используются атрибуты xlink:href или l:href
+  // без соответствующего объявления xmlns:xlink или xmlns:l на корневом теге FictionBook,
+  // из-за чего строгий XML-парсер браузера завершается с ошибкой 'Namespace prefix xlink/l is not defined'.
+  xmlText = xmlText.replace(/<FictionBook([^>]*)>/i, (match, attrs) => {
+    let newAttrs = attrs
+    if (!newAttrs.includes('xmlns:xlink')) {
+      newAttrs += ' xmlns:xlink="http://www.w3.org/1999/xlink"'
+    }
+    if (!newAttrs.includes('xmlns:l')) {
+      newAttrs += ' xmlns:l="http://www.w3.org/1999/xlink"'
+    }
+    return `<FictionBook${newAttrs}>`
+  })
+
+  // 3. Заменяем именованные HTML-сущности на числовые XML entities, чтобы XML-парсер не падал
+  xmlText = xmlText.replace(/&nbsp;/g, '&#160;')
+                   .replace(/&copy;/g, '&#169;')
+                   .replace(/&mdash;/g, '&#8212;')
+                   .replace(/&ndash;/g, '&#8211;')
+                   .replace(/&laquo;/g, '&#171;')
+                   .replace(/&raquo;/g, '&#187;')
+                   .replace(/&hellip;/g, '&#8230;')
+
+  return xmlText
 }
 
 function renderFb2(xmlText: string) {
   const parser = new DOMParser()
-  const doc = parser.parseFromString(xmlText, 'text/xml')
+  let doc: Document = parser.parseFromString(xmlText, 'text/xml')
+  let parserError = doc.querySelector('parsererror')
+
+  // Толерантный Fallback: если строгий XML-парсер споткнулся на невалидном XML (синтаксические ошибки и т.д.),
+  // используем HTML-парсер браузера, который толерантен к любым погрешностям разметки
+  if (parserError) {
+    console.warn('Strict XML parsing failed, attempting tolerant HTML fallback parser:', parserError.textContent)
+    const htmlDoc = parser.parseFromString(xmlText, 'text/html')
+    if (htmlDoc.querySelector('body')) {
+      doc = htmlDoc
+      parserError = null
+    }
+  }
+
+  if (parserError) {
+    console.error('FB2 XML parse error:', parserError.textContent)
+    errorMessage.value = 'Ошибка структуры книги (некорректный XML формат)'
+    return
+  }
 
   const bodies = doc.querySelectorAll('body')
   let mainBody: Element | null = null
@@ -186,7 +254,7 @@ function renderFb2(xmlText: string) {
   }
   if (!mainBody && bodies.length > 0) mainBody = bodies[0]
   if (!mainBody) {
-    fb2Html.value = '<p>Не удалось разобрать содержимое книги.</p>'
+    errorMessage.value = 'Не удалось разобрать содержимое книги.'
     return
   }
 
@@ -336,6 +404,19 @@ async function loadEpubBook() {
   loadingText.value = 'Загрузка и рендеринг EPUB...'
   const url = api.getDownloadUrl(props.bookId, 'epub')
 
+  const testRes = await fetch(url, { method: 'HEAD' })
+  if (!testRes.ok) {
+    let msg = `Файл EPUB недоступен (${testRes.status})`
+    try {
+      const getRes = await fetch(url)
+      const data = await getRes.json()
+      if (data.error) msg = data.error
+    } catch {
+      // ignore
+    }
+    throw new Error(msg)
+  }
+
   epubBook = ePub(url)
   await epubBook.ready
 
@@ -483,6 +564,17 @@ function setWidth(w: string) {
       <div v-if="loading" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-bg-primary gap-3">
         <Loader2 class="w-8 h-8 text-accent animate-spin" />
         <span class="text-sm text-fg-secondary">{{ loadingText }}</span>
+      </div>
+
+      <!-- Ошибка загрузки книги -->
+      <div v-else-if="errorMessage" class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div class="max-w-md p-6 rounded-2xl bg-bg-surface border border-border shadow-lg">
+          <p class="text-rose-500 font-semibold text-base mb-2">Не удалось открыть книгу</p>
+          <p class="text-fg-secondary text-sm mb-6">{{ errorMessage }}</p>
+          <button @click="router.back()" class="px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity">
+            {{ t('reader.back_to_catalog') }}
+          </button>
+        </div>
       </div>
 
       <!-- Неподдерживаемый формат -->

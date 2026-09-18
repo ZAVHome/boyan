@@ -8,7 +8,7 @@
   <img src="docs/assets/banner.jpg" alt="Boyan" width="100%" />
 </p>
 
-[![Release](https://img.shields.io/badge/release-v0.0.6--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
+[![Release](https://img.shields.io/badge/release-v0.0.7--beta-blue.svg)](https://github.com/ZAVHome/boyan/releases)
 [![Go Version](https://img.shields.io/badge/go-1.23%2B-00ADD8.svg?logo=go)](https://golang.org)
 [![Vue 3](https://img.shields.io/badge/vue-3.5-4FC08D.svg?logo=vue.js)](https://vuejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

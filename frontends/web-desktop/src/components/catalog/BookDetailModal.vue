@@ -15,7 +15,11 @@ import {
   Layers,
   User as UserIcon,
   Tag,
-  Edit
+  Edit,
+  Building2,
+  Calendar,
+  Globe,
+  Hash
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -40,9 +44,11 @@ const coverUrl = computed(() => {
   return api.getCoverUrl(props.book.id)
 })
 
-const authorNames = computed(() => {
-  return props.book.authors?.map(a => a.name).join(', ') || t('catalog.author_unknown')
-})
+function extractYear(val?: string): string {
+  if (!val) return ''
+  const m = val.match(/\b\d{4}\b/)
+  return m ? m[0] : val.trim()
+}
 
 onMounted(async () => {
   if (authStore.isAuthenticated) {
@@ -119,31 +125,132 @@ function startReading() {
               {{ book.title }}
             </h2>
 
+            <!-- Оригинальное название -->
+            <div v-if="book.original_title" class="flex items-center gap-2 text-xs text-fg-muted">
+              <span>Оригинал:</span>
+              <router-link
+                :to="{ path: '/', query: { q: book.original_title } }"
+                @click="emit('close')"
+                class="text-fg-secondary hover:text-accent hover:underline transition-colors italic"
+                :title="`Искать по названию: ${book.original_title}`"
+              >
+                {{ book.original_title }}
+              </router-link>
+            </div>
+
+            <!-- Авторы -->
             <div class="flex items-center gap-2 text-sm text-fg-secondary">
-              <UserIcon class="w-4 h-4 text-accent" />
-              <span class="font-medium text-fg-primary">{{ authorNames }}</span>
+              <UserIcon class="w-4 h-4 text-accent shrink-0" />
+              <div v-if="book.authors && book.authors.length > 0" class="flex flex-wrap items-center gap-1">
+                <span v-for="(a, idx) in book.authors" :key="a.id || idx">
+                  <router-link
+                    :to="{ path: '/authors', query: { id: a.id } }"
+                    @click="emit('close')"
+                    class="font-medium text-fg-primary hover:text-accent hover:underline transition-colors"
+                    :title="`Перейти к автору: ${a.name}`"
+                  >
+                    {{ a.name }}
+                  </router-link>
+                  <span v-if="idx < book.authors.length - 1" class="text-fg-muted mr-1">,</span>
+                </span>
+              </div>
+              <span v-else class="font-medium text-fg-primary">{{ t('catalog.author_unknown') }}</span>
             </div>
 
             <!-- Серия -->
             <div v-if="book.series && book.series.length > 0" class="flex items-center gap-2 text-sm text-fg-secondary">
-              <Layers class="w-4 h-4 text-accent" />
-              <span>
-                {{ book.series[0].name }}
-                <span v-if="book.series[0].index" class="font-semibold text-accent ml-1">
-                  #{{ book.series[0].index }}
+              <Layers class="w-4 h-4 text-accent shrink-0" />
+              <div class="flex flex-wrap items-center gap-2">
+                <span v-for="s in book.series" :key="s.id">
+                  <router-link
+                    :to="{ path: '/series', query: { id: s.id } }"
+                    @click="emit('close')"
+                    class="font-medium text-fg-primary hover:text-accent hover:underline transition-colors"
+                    :title="`Перейти к серии: ${s.name}`"
+                  >
+                    {{ s.name }}
+                  </router-link>
+                  <span v-if="s.index" class="font-semibold text-accent ml-1.5 text-xs bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
+                    #{{ s.index }}
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
 
             <!-- Жанры -->
-            <div v-if="book.genres && book.genres.length > 0" class="flex flex-wrap gap-1.5 pt-1">
-              <span
-                v-for="g in book.genres"
-                :key="g.code"
-                class="px-2 py-0.5 rounded-lg text-xs bg-bg-secondary text-fg-secondary border border-border"
-              >
-                {{ g.name_ru || g.name_en || g.code }}
-              </span>
+            <div v-if="book.genres && book.genres.length > 0" class="flex items-center gap-2 pt-0.5 flex-wrap">
+              <Tag class="w-4 h-4 text-accent shrink-0" />
+              <div class="flex flex-wrap gap-1.5">
+                <router-link
+                  v-for="g in book.genres"
+                  :key="g.code"
+                  :to="{ path: '/', query: { genre: g.code } }"
+                  @click="emit('close')"
+                  class="px-2 py-0.5 rounded-lg text-xs bg-bg-secondary hover:bg-accent/15 text-fg-secondary hover:text-accent border border-border hover:border-accent/40 transition-colors"
+                  :title="`Книги жанра ${g.name_ru || g.code}`"
+                >
+                  {{ g.name_ru || g.name_en || g.code }}
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Издательство, год, язык, ISBN -->
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pt-1">
+              <!-- Издательство -->
+              <div v-if="book.publisher" class="flex items-center gap-1.5 text-fg-secondary">
+                <Building2 class="w-3.5 h-3.5 text-accent shrink-0" />
+                <span class="text-fg-muted">{{ t('book.publisher') }}:</span>
+                <router-link
+                  :to="{ path: '/', query: { publisher: book.publisher } }"
+                  @click="emit('close')"
+                  class="font-medium text-fg-primary hover:text-accent hover:underline transition-colors"
+                  :title="`Книги издательства ${book.publisher}`"
+                >
+                  {{ book.publisher }}
+                </router-link>
+              </div>
+
+              <!-- Год издания -->
+              <div v-if="book.published_date" class="flex items-center gap-1.5 text-fg-secondary">
+                <Calendar class="w-3.5 h-3.5 text-accent shrink-0" />
+                <span class="text-fg-muted">{{ t('book.year') }}:</span>
+                <router-link
+                  :to="{ path: '/', query: { year: extractYear(book.published_date) } }"
+                  @click="emit('close')"
+                  class="font-medium text-fg-primary hover:text-accent hover:underline transition-colors"
+                  :title="`Книги за ${extractYear(book.published_date)} год`"
+                >
+                  {{ book.published_date }}
+                </router-link>
+              </div>
+
+              <!-- Язык -->
+              <div v-if="book.language" class="flex items-center gap-1.5 text-fg-secondary">
+                <Globe class="w-3.5 h-3.5 text-accent shrink-0" />
+                <span class="text-fg-muted">{{ t('book.language') }}:</span>
+                <router-link
+                  :to="{ path: '/', query: { language: book.language } }"
+                  @click="emit('close')"
+                  class="font-medium text-fg-primary hover:text-accent hover:underline uppercase transition-colors"
+                  :title="`Книги на языке ${book.language}`"
+                >
+                  {{ book.language }}
+                </router-link>
+              </div>
+
+              <!-- ISBN -->
+              <div v-if="book.isbn" class="flex items-center gap-1.5 text-fg-secondary">
+                <Hash class="w-3.5 h-3.5 text-accent shrink-0" />
+                <span class="text-fg-muted">ISBN:</span>
+                <router-link
+                  :to="{ path: '/', query: { q: book.isbn } }"
+                  @click="emit('close')"
+                  class="font-mono text-fg-primary hover:text-accent hover:underline transition-colors"
+                  :title="`Искать по ISBN: ${book.isbn}`"
+                >
+                  {{ book.isbn }}
+                </router-link>
+              </div>
             </div>
 
             <!-- Прогресс чтения -->
@@ -197,7 +304,7 @@ function startReading() {
               <!-- Кнопка редактирования для администратора -->
               <router-link
                 v-if="authStore.isAdmin"
-                :to="{ path: '/admin/books', query: { q: book.title } }"
+                :to="{ name: 'admin-book-edit', params: { id: book.id } }"
                 @click="emit('close')"
                 class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-semibold transition-all"
                 :title="t('admin.books.edit_btn')"

@@ -2,13 +2,21 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"boyan/internal/config"
+	"boyan/internal/models"
+	"boyan/internal/parsers/fb2"
 	"boyan/internal/services"
+	"boyan/internal/storage"
 	"boyan/internal/watcher"
 
 	"github.com/go-chi/chi/v5"
@@ -18,17 +26,20 @@ type AdminTasksHandler struct {
 	taskManager *services.TaskManager
 	watcher     *watcher.Watcher
 	cfg         *config.Config
+	bookRepo    *storage.BookRepository
 }
 
 func NewAdminTasksHandler(
 	taskManager *services.TaskManager,
 	watcher *watcher.Watcher,
 	cfg *config.Config,
+	bookRepo *storage.BookRepository,
 ) *AdminTasksHandler {
 	return &AdminTasksHandler{
 		taskManager: taskManager,
 		watcher:     watcher,
 		cfg:         cfg,
+		bookRepo:    bookRepo,
 	}
 }
 
@@ -109,4 +120,86 @@ func (h *AdminTasksHandler) RunScan(w http.ResponseWriter, r *http.Request) {
 	}(task.ID, scanDir, taskCtx)
 
 	writeJSON(w, http.StatusAccepted, task)
+}
+
+// RunRepairFB2 запускает фоновую задачу инспекции и санитизации всех FB2-файлов в библиотеке.
+func (h *AdminTasksHandler) RunRepairFB2(w http.ResponseWriter, r *http.Request) {
+	if h.bookRepo == nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
+
+	ctx := r.Context()
+	fb2Files, err := h.bookRepo.GetAllFB2Files(ctx)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "DB_ERROR", err)
+		return
+	}
+
+	task, taskCtx := h.taskManager.CreateTask(context.Background(), "repair_fb2", len(fb2Files))
+	h.taskManager.StartTask(task.ID)
+
+	go func(taskID string, files []models.BookFile, bgCtx context.Context) {
+		total := len(files)
+		repairedCount := 0
+		errorCount := 0
+
+		for idx, file := range files {
+			select {
+			case <-bgCtx.Done():
+				h.taskManager.CancelTask(taskID)
+				return
+			default:
+			}
+
+			fullPath := file.FilePath
+			if !filepath.IsAbs(fullPath) && h.cfg != nil && h.cfg.Storage.LibraryDir != "" {
+				fullPath = filepath.Join(h.cfg.Storage.LibraryDir, fullPath)
+			}
+
+			_, err := os.Stat(fullPath)
+			if err != nil {
+				h.taskManager.AddError(taskID, fmt.Sprintf("Файл не найден: %s", file.FilePath))
+				errorCount++
+				h.taskManager.UpdateProgress(taskID, idx+1, total, filepath.Base(file.FilePath))
+				continue
+			}
+
+			modified, err := fb2.SanitizeFB2File(fullPath)
+			if err != nil {
+				h.taskManager.AddError(taskID, fmt.Sprintf("Ошибка санитизации %s: %v", file.FilePath, err))
+				errorCount++
+			} else if modified {
+				repairedCount++
+				if newInfo, statErr := os.Stat(fullPath); statErr == nil {
+					file.FileSize = newInfo.Size()
+				}
+				if newHash, hashErr := calculateFileHash(fullPath); hashErr == nil {
+					file.SHA256 = newHash
+				}
+				_ = h.bookRepo.UpdateBookFile(bgCtx, &file)
+			}
+
+			h.taskManager.UpdateProgress(taskID, idx+1, total, filepath.Base(file.FilePath))
+		}
+
+		resultMsg := fmt.Sprintf("Проверено: %d, исправлено: %d, ошибок: %d", total, repairedCount, errorCount)
+		h.taskManager.CompleteTask(taskID, resultMsg)
+	}(task.ID, fb2Files, taskCtx)
+
+	writeJSON(w, http.StatusAccepted, task)
+}
+
+func calculateFileHash(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

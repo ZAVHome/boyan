@@ -55,6 +55,12 @@ const routes = [
         component: () => import('@/views/admin/AdminBooksView.vue')
       },
       {
+        path: 'books/:id/edit',
+        name: 'admin-book-edit',
+        component: () => import('@/views/admin/AdminBookEditView.vue'),
+        props: true
+      },
+      {
         path: 'quarantine',
         name: 'admin-quarantine',
         component: () => import('@/views/admin/AdminQuarantineView.vue')

@@ -50,25 +50,70 @@
             <h3 class="text-base font-bold text-theme-text leading-snug">
               {{ book.title }}
             </h3>
-            <p class="text-sm text-theme-muted mt-0.5">
-              {{ authorNames }}
-            </p>
-            <p
-              v-if="book.series && book.series.length > 0"
-              class="text-xs text-primary-600 dark:text-primary-400 mt-1"
-            >
-              {{ book.series[0].name }}
-              <span v-if="book.series[0].index">#{{ book.series[0].index }}</span>
-            </p>
 
+            <!-- Авторы -->
+            <div class="text-sm text-theme-muted mt-0.5">
+              <span v-if="book.authors && book.authors.length > 0">
+                <span v-for="(a, idx) in book.authors" :key="a.id || idx">
+                  <button
+                    type="button"
+                    @click="searchBy(a.name)"
+                    class="hover:underline hover:text-theme-text font-medium"
+                  >
+                    {{ a.name }}
+                  </button>
+                  <span v-if="idx < book.authors.length - 1">, </span>
+                </span>
+              </span>
+              <span v-else>{{ authorNames }}</span>
+            </div>
+
+            <!-- Серия -->
+            <div
+              v-if="book.series && book.series.length > 0"
+              class="mt-1"
+            >
+              <button
+                type="button"
+                @click="searchBy(book.series[0].name)"
+                class="text-xs text-primary-600 dark:text-primary-400 hover:underline text-left"
+              >
+                {{ book.series[0].name }}
+                <span v-if="book.series[0].index">#{{ book.series[0].index }}</span>
+              </button>
+            </div>
+
+            <!-- Жанры -->
             <div v-if="book.genres && book.genres.length > 0" class="flex flex-wrap gap-1 mt-2">
-              <span
-                v-for="g in book.genres.slice(0, 3)"
+              <button
+                v-for="g in book.genres.slice(0, 4)"
                 :key="g.code"
-                class="px-1.5 py-0.5 text-[10px] rounded bg-theme-card border border-theme text-theme-muted"
+                type="button"
+                @click="searchBy(g.name_ru || g.code)"
+                class="px-1.5 py-0.5 text-[10px] rounded bg-theme-card border border-theme text-theme-muted hover:text-theme-text hover:border-primary-500 transition-colors"
               >
                 {{ g.name_ru || g.code }}
-              </span>
+              </button>
+            </div>
+
+            <!-- Дополнительно: издательство, год -->
+            <div v-if="book.publisher || book.published_date" class="flex flex-wrap gap-2 text-[11px] text-theme-muted mt-2">
+              <button
+                v-if="book.publisher"
+                type="button"
+                @click="searchBy(book.publisher)"
+                class="hover:underline hover:text-theme-text"
+              >
+                {{ book.publisher }}
+              </button>
+              <button
+                v-if="book.published_date"
+                type="button"
+                @click="searchBy(book.published_date)"
+                class="hover:underline hover:text-theme-text"
+              >
+                {{ book.published_date }}
+              </button>
             </div>
           </div>
         </div>
@@ -263,6 +308,11 @@ function readBook() {
   if (!props.book) return
   emit('close')
   router.push(`/reader/${props.book.id}?format=${primaryFormat.value}`)
+}
+
+function searchBy(query: string) {
+  emit('close')
+  router.push({ name: 'search', query: { q: query } })
 }
 
 function close() {

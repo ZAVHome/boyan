@@ -67,7 +67,7 @@ func NewRouter(
 	adminDashboardH := handlers.NewAdminDashboardHandler(cfg, pool, bookRepo)
 	adminUsersH := handlers.NewAdminUsersHandler(userRepo)
 	adminBooksH := handlers.NewAdminBooksHandler(cfg, bookRepo, coverCache)
-	adminTasksH := handlers.NewAdminTasksHandler(taskManager, watcherInstance, cfg)
+	adminTasksH := handlers.NewAdminTasksHandler(taskManager, watcherInstance, cfg, bookRepo)
 	adminSettingsH := handlers.NewAdminSettingsHandler(cfg, configPath)
 
 	// Системные эндпоинты
@@ -168,6 +168,7 @@ func NewRouter(
 
 			// Сканер хранилища и фоновые задачи
 			r.Post("/admin/scanner/run", adminTasksH.RunScan)
+			r.Post("/admin/storage/repair-fb2", adminTasksH.RunRepairFB2)
 			r.Get("/admin/tasks", adminTasksH.ListTasks)
 			r.Get("/admin/tasks/{id}", adminTasksH.GetTask)
 			r.Post("/admin/tasks/{id}/cancel", adminTasksH.CancelTask)

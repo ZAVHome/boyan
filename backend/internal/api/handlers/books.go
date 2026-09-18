@@ -46,12 +46,32 @@ func (h *BooksHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * perPage
 	query := r.URL.Query().Get("q")
+	genre := r.URL.Query().Get("genre")
+	publisher := r.URL.Query().Get("publisher")
+	year := r.URL.Query().Get("year")
+	language := r.URL.Query().Get("language")
 	sort := r.URL.Query().Get("sort")
 	if sort == "" {
 		sort = "recent"
 	}
+	dir := r.URL.Query().Get("dir")
+	if dir == "" {
+		dir = r.URL.Query().Get("order")
+	}
 
-	books, total, err := h.repo.SearchBooksFTSSorted(r.Context(), query, offset, perPage, sort)
+	filter := storage.BookFilter{
+		Query:     query,
+		Genre:     genre,
+		Publisher: publisher,
+		Year:      year,
+		Language:  language,
+		Sort:      sort,
+		Direction: dir,
+		Offset:    offset,
+		Limit:     perPage,
+	}
+
+	books, total, err := h.repo.SearchBooksWithFilter(r.Context(), filter)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "SEARCH_FAILED")
 		return

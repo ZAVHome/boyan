@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useCatalogStore } from '@/stores/catalog'
 import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
@@ -21,6 +21,7 @@ import {
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const catalogStore = useCatalogStore()
 
 const seriesList = ref<SeriesWithCount[]>([])
@@ -42,8 +43,36 @@ const selectedBook = ref<Book | null>(null)
 let searchDebounceTimer: any = null
 
 onMounted(() => {
+  if (route.query.q && typeof route.query.q === 'string') {
+    searchQuery.value = route.query.q
+  }
   fetchSeries()
 })
+
+watch(
+  () => route.query.id,
+  (newId) => {
+    if (newId && typeof newId === 'string') {
+      if (!selectedSeries.value || selectedSeries.value.id !== newId) {
+        openSeriesById(newId)
+      }
+    } else {
+      selectedSeries.value = null
+      seriesBooks.value = []
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.query.q,
+  (newQ) => {
+    if (typeof newQ === 'string' && newQ !== searchQuery.value) {
+      searchQuery.value = newQ
+      fetchSeries(true)
+    }
+  }
+)
 
 async function fetchSeries(resetPage = false) {
   if (resetPage) {
@@ -103,23 +132,32 @@ function setPage(p: number) {
   }
 }
 
-async function openSeries(series: SeriesWithCount) {
-  selectedSeries.value = series
+async function openSeriesById(id: string) {
   booksLoading.value = true
   try {
-    const res = await api.get<SeriesBooksResponse>(`/api/v1/series/${series.id}/books`)
+    const res = await api.get<SeriesBooksResponse>(`/api/v1/series/${id}/books`)
+    selectedSeries.value = res.series
     seriesBooks.value = res.items || []
   } catch (err) {
     console.error('Failed to load series books:', err)
-    seriesBooks.value = []
   } finally {
     booksLoading.value = false
   }
 }
 
+async function openSeries(series: SeriesWithCount) {
+  selectedSeries.value = series
+  router.push({ query: { ...route.query, id: series.id } })
+}
+
 function backToSeries() {
   selectedSeries.value = null
   seriesBooks.value = []
+  if (route.query.id) {
+    const q = { ...route.query }
+    delete q.id
+    router.replace({ query: q })
+  }
 }
 
 function openInCatalog(seriesName: string) {

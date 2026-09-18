@@ -9,6 +9,8 @@ build/
 *.dylib
 *.test
 *.out
+boyan
+boyan-*
 
 # Go
 vendor/
@@ -37,6 +39,7 @@ pnpm-debug.log*
 /temp/
 /tmp/
 /backups/
+scratch/
 !backend/internal/storage/
 
 # Configs & Secrets

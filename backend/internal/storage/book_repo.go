@@ -272,23 +272,57 @@ func (r *BookRepository) ListBooks(ctx context.Context, offset, limit int) ([]mo
 	return r.ListBooksSorted(ctx, offset, limit, "recent")
 }
 
+// buildBookOrderClause формирует SQL-выражение сортировки книг.
+func buildBookOrderClause(sort, direction string) string {
+	sort = strings.TrimSpace(strings.ToLower(sort))
+	direction = strings.TrimSpace(strings.ToLower(direction))
+
+	dir := "ASC"
+	if direction == "desc" || (direction == "" && (sort == "recent" || sort == "year")) {
+		dir = "DESC"
+	} else if direction == "asc" {
+		dir = "ASC"
+	}
+
+	switch sort {
+	case "title":
+		return fmt.Sprintf("ORDER BY b.title COLLATE NOCASE %s", dir)
+	case "author":
+		return fmt.Sprintf(`ORDER BY 
+			CASE WHEN (SELECT a.id FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) IS NOT NULL THEN 0 ELSE 1 END,
+			(SELECT COALESCE(NULLIF(a.sort_name, ''), a.name) FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) COLLATE NOCASE %s,
+			b.title COLLATE NOCASE ASC`, dir)
+	case "series":
+		return fmt.Sprintf(`ORDER BY 
+			CASE WHEN (SELECT s.id FROM series s JOIN book_series bs ON s.id = bs.series_id WHERE bs.book_id = b.id LIMIT 1) IS NOT NULL THEN 0 ELSE 1 END,
+			(SELECT COALESCE(NULLIF(s.name, ''), s.sort_name) FROM series s JOIN book_series bs ON s.id = bs.series_id WHERE bs.book_id = b.id LIMIT 1) COLLATE NOCASE %s,
+			(SELECT bs.series_index FROM book_series bs WHERE bs.book_id = b.id LIMIT 1) ASC,
+			b.title COLLATE NOCASE ASC`, dir)
+	case "year":
+		return fmt.Sprintf(`ORDER BY 
+			CASE WHEN b.published_date IS NOT NULL AND TRIM(b.published_date) != '' THEN 0 ELSE 1 END,
+			b.published_date %s,
+			b.title COLLATE NOCASE ASC`, dir)
+	case "recent":
+		fallthrough
+	default:
+		return fmt.Sprintf("ORDER BY b.created_at %s", dir)
+	}
+}
+
 // ListBooksSorted возвращает список книг с пагинацией и заданной сортировкой.
-func (r *BookRepository) ListBooksSorted(ctx context.Context, offset, limit int, sort string) ([]models.Book, int, error) {
+func (r *BookRepository) ListBooksSorted(ctx context.Context, offset, limit int, sort string, direction ...string) ([]models.Book, int, error) {
 	var total int
 	err := r.pool.Reader.GetContext(ctx, &total, `SELECT COUNT(*) FROM books`)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count books: %w", err)
 	}
 
-	orderClause := "ORDER BY b.created_at DESC"
-	switch sort {
-	case "title":
-		orderClause = "ORDER BY b.title COLLATE NOCASE ASC"
-	case "author":
-		orderClause = "ORDER BY (SELECT a.sort_name FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) COLLATE NOCASE ASC, b.title COLLATE NOCASE ASC"
-	default:
-		orderClause = "ORDER BY b.created_at DESC"
+	dir := ""
+	if len(direction) > 0 {
+		dir = direction[0]
 	}
+	orderClause := buildBookOrderClause(sort, dir)
 
 	var books []models.Book
 	query := fmt.Sprintf(`SELECT b.* FROM books b %s LIMIT ? OFFSET ?`, orderClause)
@@ -301,71 +335,149 @@ func (r *BookRepository) ListBooksSorted(ctx context.Context, offset, limit int,
 	return books, total, nil
 }
 
-// SearchBooksFTS выполняет полнотекстовый поиск по индексу FTS5.
-func (r *BookRepository) SearchBooksFTS(ctx context.Context, query string, offset, limit int) ([]models.Book, int, error) {
-	return r.SearchBooksFTSSorted(ctx, query, offset, limit, "recent")
+// BookFilter задает параметры фильтрации, поиска и пагинации книг.
+type BookFilter struct {
+	Query     string
+	Genre     string
+	Publisher string
+	Year      string
+	Language  string
+	Sort      string
+	Direction string
+	Offset    int
+	Limit     int
 }
 
-// SearchBooksFTSSorted выполняет полнотекстовый поиск с указанным порядком сортировки.
-func (r *BookRepository) SearchBooksFTSSorted(ctx context.Context, query string, offset, limit int, sort string) ([]models.Book, int, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return r.ListBooksSorted(ctx, offset, limit, sort)
+// SearchBooksWithFilter выполняет фильтрацию и поиск книг по различным критериям.
+func (r *BookRepository) SearchBooksWithFilter(ctx context.Context, filter BookFilter) ([]models.Book, int, error) {
+	query := strings.TrimSpace(filter.Query)
+	genre := strings.TrimSpace(filter.Genre)
+	publisher := strings.TrimSpace(filter.Publisher)
+	year := strings.TrimSpace(filter.Year)
+	language := strings.TrimSpace(filter.Language)
+
+	if query == "" && genre == "" && publisher == "" && year == "" && language == "" {
+		return r.ListBooksSorted(ctx, filter.Offset, filter.Limit, filter.Sort, filter.Direction)
 	}
 
-	// Подготавливаем слова для префиксного поиска
-	words := strings.Fields(query)
-	var formattedTerms []string
-	for _, w := range words {
-		cleaned := strings.Map(func(r rune) rune {
-			if strings.ContainsRune(`"*-+^:()'`, r) {
-				return -1
+	var joins []string
+	var whereClauses []string
+	var args []any
+
+	if query != "" {
+		words := strings.Fields(query)
+		var formattedTerms []string
+		for _, w := range words {
+			cleaned := strings.Map(func(r rune) rune {
+				if strings.ContainsRune(`"*-+^:()'`, r) {
+					return -1
+				}
+				return r
+			}, w)
+			if cleaned != "" {
+				formattedTerms = append(formattedTerms, cleaned+"*")
 			}
-			return r
-		}, w)
-		if cleaned != "" {
-			formattedTerms = append(formattedTerms, cleaned+"*")
 		}
+		if len(formattedTerms) == 0 {
+			return []models.Book{}, 0, nil
+		}
+		joins = append(joins, "JOIN books_fts fts ON b.id = fts.book_id")
+		whereClauses = append(whereClauses, "books_fts MATCH ?")
+		args = append(args, strings.Join(formattedTerms, " "))
 	}
-	if len(formattedTerms) == 0 {
-		return nil, 0, nil
+
+	if genre != "" {
+		joins = append(joins, "JOIN book_genres bg ON b.id = bg.book_id")
+		whereClauses = append(whereClauses, "bg.genre_code = ?")
+		args = append(args, genre)
 	}
-	ftsQuery := strings.Join(formattedTerms, " ")
+
+	if publisher != "" {
+		whereClauses = append(whereClauses, "b.publisher LIKE ?")
+		args = append(args, "%"+publisher+"%")
+	}
+
+	if language != "" {
+		whereClauses = append(whereClauses, "b.language = ?")
+		args = append(args, language)
+	}
+
+	if year != "" {
+		whereClauses = append(whereClauses, "b.published_date LIKE ?")
+		args = append(args, "%"+year+"%")
+	}
+
+	if len(whereClauses) == 0 {
+		return r.ListBooksSorted(ctx, filter.Offset, filter.Limit, filter.Sort, filter.Direction)
+	}
+
+	joinSQL := strings.Join(joins, " ")
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	countSQL := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT b.id)
+		FROM books b
+		%s
+		WHERE %s
+	`, joinSQL, whereSQL)
 
 	var total int
-	err := r.pool.Reader.GetContext(ctx, &total, `
-		SELECT COUNT(*) FROM books_fts WHERE books_fts MATCH ?
-	`, ftsQuery)
+	err := r.pool.Reader.GetContext(ctx, &total, countSQL, args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("count fts: %w", err)
+		return nil, 0, fmt.Errorf("count books with filter: %w", err)
+	}
+	if total == 0 {
+		return []models.Book{}, 0, nil
 	}
 
-	orderClause := "ORDER BY bm25(books_fts)"
-	switch sort {
-	case "title":
-		orderClause = "ORDER BY b.title COLLATE NOCASE ASC"
-	case "author":
-		orderClause = "ORDER BY (SELECT a.sort_name FROM authors a JOIN book_authors ba ON a.id = ba.author_id WHERE ba.book_id = b.id ORDER BY ba.author_order ASC LIMIT 1) COLLATE NOCASE ASC, b.title COLLATE NOCASE ASC"
-	case "recent":
-		orderClause = "ORDER BY b.created_at DESC"
+	orderClause := "ORDER BY b.created_at DESC"
+	if query != "" && (filter.Sort == "" || filter.Sort == "relevance") {
+		orderClause = "ORDER BY bm25(books_fts)"
+	} else {
+		orderClause = buildBookOrderClause(filter.Sort, filter.Direction)
 	}
 
-	var books []models.Book
-	querySQL := fmt.Sprintf(`
-		SELECT b.*
+	selectSQL := fmt.Sprintf(`
+		SELECT DISTINCT b.*
 		FROM books b
-		JOIN books_fts fts ON b.id = fts.book_id
-		WHERE books_fts MATCH ?
+		%s
+		WHERE %s
 		%s
 		LIMIT ? OFFSET ?
-	`, orderClause)
-	err = r.pool.Reader.SelectContext(ctx, &books, querySQL, ftsQuery, limit, offset)
+	`, joinSQL, whereSQL, orderClause)
+
+	selectArgs := make([]any, len(args), len(args)+2)
+	copy(selectArgs, args)
+	selectArgs = append(selectArgs, filter.Limit, filter.Offset)
+
+	var books []models.Book
+	err = r.pool.Reader.SelectContext(ctx, &books, selectSQL, selectArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("select fts: %w", err)
+		return nil, 0, fmt.Errorf("select books with filter: %w", err)
 	}
 
 	r.enrichBooksWithDetails(ctx, books)
 	return books, total, nil
+}
+
+// SearchBooksFTS выполняет полнотекстовый поиск по индексу FTS5.
+func (r *BookRepository) SearchBooksFTS(ctx context.Context, query string, offset, limit int) ([]models.Book, int, error) {
+	return r.SearchBooksFTSSorted(ctx, query, offset, limit, "recent", "desc")
+}
+
+// SearchBooksFTSSorted выполняет полнотекстовый поиск с указанным порядком сортировки.
+func (r *BookRepository) SearchBooksFTSSorted(ctx context.Context, query string, offset, limit int, sort string, direction ...string) ([]models.Book, int, error) {
+	dir := ""
+	if len(direction) > 0 {
+		dir = direction[0]
+	}
+	return r.SearchBooksWithFilter(ctx, BookFilter{
+		Query:     query,
+		Sort:      sort,
+		Direction: dir,
+		Offset:    offset,
+		Limit:     limit,
+	})
 }
 
 // SetCoverCached обновляет флаг наличия закешированной обложки.
@@ -773,6 +885,17 @@ func (r *BookRepository) UpdateBookFile(ctx context.Context, file *models.BookFi
 		WHERE id = ?
 	`, file.Format, file.FilePath, file.ArchiveInnerPath, file.FileSize, file.SHA256, file.ID)
 	return err
+}
+
+// GetAllFB2Files возвращает все файлы формата FB2 из библиотеки для сервисных задач и ремонта.
+func (r *BookRepository) GetAllFB2Files(ctx context.Context) ([]models.BookFile, error) {
+	var files []models.BookFile
+	err := r.pool.Reader.SelectContext(ctx, &files, `
+		SELECT * FROM book_files
+		WHERE LOWER(format) = 'fb2' OR LOWER(file_path) LIKE '%.fb2'
+		ORDER BY created_at ASC
+	`)
+	return files, err
 }
 
 // DeleteBookFile удаляет запись о файле из базы данных.

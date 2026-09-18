@@ -80,8 +80,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { Search, X, Loader2 } from 'lucide-vue-next'
 import TopHeader from '@/components/common/TopHeader.vue'
 import BottomNav from '@/components/common/BottomNav.vue'
@@ -92,6 +92,7 @@ import { useCatalogStore } from '@/stores/catalog'
 import type { Book, BookListResponse } from '@/api/types'
 
 const router = useRouter()
+const route = useRoute()
 const catalogStore = useCatalogStore()
 
 const query = ref('')
@@ -109,6 +110,18 @@ onMounted(() => {
     } catch {
       searchHistory.value = []
     }
+  }
+
+  if (route.query.q && typeof route.query.q === 'string') {
+    query.value = route.query.q
+    onSearchInput()
+  }
+})
+
+watch(() => route.query.q, (newQ) => {
+  if (typeof newQ === 'string' && newQ !== query.value) {
+    query.value = newQ
+    onSearchInput()
   }
 })
 

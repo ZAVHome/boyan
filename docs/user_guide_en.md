@@ -55,19 +55,39 @@ The desktop application is accessible in any modern web browser at: **`http://lo
 ### Catalog Browsing & Search
 
 - **Global Search:** Type book titles, author names, or series titles in the top navigation bar. Search features SQLite FTS5 with built-in stemming for English and Russian.
-- **Sidebar Filters:** Instantly filter your collection by genres, authors, or series.
-- **Book Cards:** Display high-resolution cover thumbnails, book title, primary author, series index, and available file format badges.
-- **Book Detail Modal:** Click any book card to inspect complete annotations, tags, file size, and action buttons:
+- **Storefront Sorting:** Toggle display order — *Recent Additions*, *By Title (A-Z)*, *By Author (A-Z)*.
+- **Interactive Filters & Badges:** Clicking any author, series, genre tag, publisher, publication year, or language instantly filters the catalog and adds active filter badges with one-click removal `×`.
+- **Book Cards:** Display high-resolution cover thumbnails, book title, clickable author names, series with index (`#1`), and available file format badges.
+- **Book Detail Modal:** Click any book card to inspect complete annotations, tags, publication metadata (publisher, year, language, ISBN, file size), and action buttons:
   - **Read Online** — launches the universal reader directly in your browser.
   - **Download** — downloads the original book archive (`.fb2`, `.fb2.zip`, or `.epub`).
   - **Add to Shelf** — organizes the book into your personal reading shelves.
+  - **Edit Metadata (Admin)** — quick navigation to the administrative book metadata editor.
+
+### Authors & Series Catalogs
+
+- **Authors Catalog (`/authors`):**
+  - Alphabetical index (A-Z, А-Я) for fast jumping to specific letters.
+  - Live search filtering authors by name substring.
+  - Author cards showing total book counts.
+  - Dedicated author detail page displaying their bibliography with one-click reading.
+- **Series & Cycles Catalog (`/series`):**
+  - Alphabetical index and search across all book series.
+  - Series cards showing total volume count.
+  - Displays all volumes in proper chronological volume order (`#1`, `#2`, `#3`...).
+
+### Connect Reader Modal (ConnectModal)
+
+The top navigation bar and sidebar provide a **"Connect Reader"** button:
+- Displays instant OPDS v1.2 (Atom XML), OPDS v2.0 (JSON-LD), and REST API documentation URLs.
+- Includes **Copy** buttons for one-click clipboard copying to paste into e-reader apps.
 
 ### Built-in Universal Web Reader
 
 The in-browser reader automatically detects the format and delivers optimal typography:
 
-- **For FB2 and FB2.ZIP:** Instant chapter streaming with proper formatting, blockquotes, and embedded illustrations.
-- **For EPUB:** Smooth pagination powered by ePub.js.
+- **For FB2 and FB2.ZIP:** Instant chapter streaming with proper formatting, cover page display, and built-in XML markup sanitization.
+- **For EPUB:** Smooth pagination powered by ePub.js with dynamic theme styling.
 
 #### Reader Settings (Gear Icon in Top Toolbar)
 
@@ -92,15 +112,27 @@ Organize your library with built-in user shelves:
 
 To change shelf status, open any book modal or use the quick shelf dropdown selector.
 
-### Duplicate & Quarantine Moderation
+### Admin Suite (`/admin`)
 
-When new books are imported, the background daemon checks SHA-256 checksums to prevent duplicates and scans files for corruption. Problematic files are routed to **Quarantine**:
+Users with the `admin` role can access the comprehensive administrative console at **`/admin`**:
 
-1. Click **Quarantine** in the top navigation bar (administrator privileges required).
-2. Review quarantined files categorized by reason (`duplicate` or `corrupted`).
-3. Actions:
-   - **Restore:** Force import the book into the main catalog anyway.
-   - **Delete:** Permanently purge the file from disk storage.
+1. **Dashboard & Host Metrics:** Live server resource monitoring (RAM usage, CPU, goroutines, uptime), SQLite WAL database status, cover cache size, and Telegram bot connectivity.
+2. **User Management:** Create accounts, assign roles (`admin`, `user`, `restricted`), reset passwords, ban, or delete users.
+3. **Book Curation & Metadata Editor (`/admin/books/:id/edit`):**
+   - Inspect technical parameters (storage path, file size, SHA-256 hash).
+   - Edit title, original title, annotation, publisher, year, language, and ISBN.
+   - Manage authors, assign series with sequence numbers, edit genre tags.
+   - Preview book cover with a one-click button to regenerate the cover thumbnail from source files.
+   - Batch deletion and curation from the books list table.
+4. **Storage & Task Manager:**
+   - Storage utilization metrics.
+   - Background folder scanning (`watch_dir` and `library_dir`).
+   - Background FB2 repair and sanitization (repairs BOM, missing XML namespaces, and unescaped HTML entities across existing files).
+   - Asynchronous Calibre library import with real-time progress indicators.
+   - SQLite WAL truncation (`PRAGMA wal_checkpoint(TRUNCATE)`) and cover cache purging.
+5. **System Logs:** Live viewer of recent `slog` server events with level filtering (INFO, WARN, ERROR, DEBUG).
+6. **System Configuration:** In-browser editor for `config.yaml` with hot-reload of services.
+7. **Quarantine Moderation:** Review quarantined duplicate or corrupt files with force-restore or permanent deletion.
 
 ---
 

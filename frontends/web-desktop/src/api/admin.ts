@@ -159,6 +159,8 @@ export const adminApi = {
   // Tasks & Scanner
   runScan: (target: 'watch_dir' | 'library_dir') =>
     api.post<AdminTask>('/api/v1/admin/scanner/run', { target }),
+  repairFB2: () =>
+    api.post<AdminTask>('/api/v1/admin/storage/repair-fb2'),
   listTasks: (limit = 20) =>
     api.get<{ tasks: AdminTask[]; total: number }>(`/api/v1/admin/tasks?limit=${limit}`),
   getTask: (id: string) =>

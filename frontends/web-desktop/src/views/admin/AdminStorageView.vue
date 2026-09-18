@@ -17,7 +17,8 @@ import {
   FolderOpen,
   AlertTriangle,
   Copy,
-  Check
+  Check,
+  Wrench
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -26,6 +27,7 @@ const tasks = ref<AdminTask[]>([])
 const settings = ref<any>(null)
 const isLoading = ref(false)
 const isStartingScan = ref(false)
+const isStartingRepair = ref(false)
 
 // Calibre форма
 const calibrePath = ref('')
@@ -130,7 +132,23 @@ async function handleCancelTask(id: string) {
 function getTaskTypeName(type: string) {
   if (type === 'import_calibre') return t('admin.storage.task_type_import_calibre')
   if (type === 'scan_library') return t('admin.storage.task_type_scan_library')
+  if (type === 'repair_fb2') return t('admin.storage.task_type_repair_fb2')
   return type
+}
+
+async function handleRunRepair() {
+  if (!confirm(t('admin.storage.repair_fb2_confirm'))) {
+    return
+  }
+  isStartingRepair.value = true
+  try {
+    await adminApi.repairFB2()
+    await fetchTasks()
+  } catch (err: any) {
+    alert(err.message || 'Failed to start FB2 repair task')
+  } finally {
+    isStartingRepair.value = false
+  }
 }
 
 async function handleCalibreImport() {
@@ -375,7 +393,35 @@ async function handleCalibreImport() {
       </div>
     </div>
 
-    <!-- БЛОК 3: Менеджер фоновых задач (Task Manager) -->
+    <!-- БЛОК 3: Исправление FB2-файлов библиотеки -->
+    <div class="bg-bg-surface rounded-2xl border border-border p-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-fg-primary mb-1 flex items-center gap-2">
+            <Wrench class="w-4 h-4 text-accent" />
+            {{ t('admin.storage.repair_fb2_title') }}
+          </h2>
+          <p class="text-xs text-fg-secondary">
+            {{ t('admin.storage.repair_fb2_subtitle') }}
+          </p>
+          <p class="text-[11px] text-fg-muted mt-2 max-w-3xl leading-relaxed">
+            {{ t('admin.storage.repair_fb2_desc') }}
+          </p>
+        </div>
+
+        <button
+          @click="handleRunRepair"
+          :disabled="isStartingRepair"
+          class="px-4 py-2.5 rounded-xl bg-accent text-white hover:bg-accent-hover text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shrink-0 self-start md:self-center"
+        >
+          <Loader2 v-if="isStartingRepair" class="w-4 h-4 animate-spin" />
+          <Wrench v-else class="w-4 h-4" />
+          <span>{{ t('admin.storage.repair_fb2_btn') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- БЛОК 4: Менеджер фоновых задач (Task Manager) -->
     <div class="bg-bg-surface rounded-2xl border border-border overflow-hidden">
       <div class="p-4 border-b border-border flex items-center justify-between">
         <h2 class="text-base font-semibold text-fg-primary flex items-center gap-2">

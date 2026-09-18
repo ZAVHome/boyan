@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useCatalogStore } from '@/stores/catalog'
 import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
@@ -22,6 +22,7 @@ import {
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const catalogStore = useCatalogStore()
 
 const authors = ref<AuthorWithCount[]>([])
@@ -43,8 +44,36 @@ const selectedBook = ref<Book | null>(null)
 let searchDebounceTimer: any = null
 
 onMounted(() => {
+  if (route.query.q && typeof route.query.q === 'string') {
+    searchQuery.value = route.query.q
+  }
   fetchAuthors()
 })
+
+watch(
+  () => route.query.id,
+  (newId) => {
+    if (newId && typeof newId === 'string') {
+      if (!selectedAuthor.value || selectedAuthor.value.id !== newId) {
+        openAuthorById(newId)
+      }
+    } else {
+      selectedAuthor.value = null
+      authorBooks.value = []
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.query.q,
+  (newQ) => {
+    if (typeof newQ === 'string' && newQ !== searchQuery.value) {
+      searchQuery.value = newQ
+      fetchAuthors(true)
+    }
+  }
+)
 
 async function fetchAuthors(resetPage = false) {
   if (resetPage) {
@@ -104,23 +133,32 @@ function setPage(p: number) {
   }
 }
 
-async function openAuthor(author: AuthorWithCount) {
-  selectedAuthor.value = author
+async function openAuthorById(id: string) {
   booksLoading.value = true
   try {
-    const res = await api.get<AuthorBooksResponse>(`/api/v1/authors/${author.id}/books`)
+    const res = await api.get<AuthorBooksResponse>(`/api/v1/authors/${id}/books`)
+    selectedAuthor.value = res.author
     authorBooks.value = res.items || []
   } catch (err) {
     console.error('Failed to load author books:', err)
-    authorBooks.value = []
   } finally {
     booksLoading.value = false
   }
 }
 
+async function openAuthor(author: AuthorWithCount) {
+  selectedAuthor.value = author
+  router.push({ query: { ...route.query, id: author.id } })
+}
+
 function backToAuthors() {
   selectedAuthor.value = null
   authorBooks.value = []
+  if (route.query.id) {
+    const q = { ...route.query }
+    delete q.id
+    router.replace({ query: q })
+  }
 }
 
 function openInCatalog(authorName: string) {

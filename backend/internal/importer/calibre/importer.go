@@ -17,6 +17,7 @@ import (
 	"boyan/internal/config"
 	"boyan/internal/models"
 	"boyan/internal/parsers/cover"
+	"boyan/internal/parsers/fb2"
 	"boyan/internal/storage"
 
 	"github.com/google/uuid"
@@ -189,6 +190,9 @@ func (imp *Importer) importSingleBook(
 		}
 
 		finalFilePath := sourceFilePath
+		fileSize := info.Size()
+		fileSHA := sha
+
 		if opts.CopyFiles {
 			destDir := filepath.Join(imp.cfg.Storage.LibraryDir, sanitizePath(authorName), sanitizePath(cBook.Title))
 			_ = os.MkdirAll(destDir, 0755)
@@ -198,14 +202,26 @@ func (imp *Importer) importSingleBook(
 				return fmt.Errorf("copy book file: %w", err)
 			}
 			finalFilePath = destPath
+
+			// Автоматическая санитизация скопированного FB2 файла в библиотеке
+			if ext == "fb2" {
+				if modified, err := fb2.SanitizeFB2File(destPath); err == nil && modified {
+					if updatedInfo, err := os.Stat(destPath); err == nil {
+						fileSize = updatedInfo.Size()
+					}
+					if updatedSHA, err := computeFileSHA256(destPath); err == nil {
+						fileSHA = updatedSHA
+					}
+				}
+			}
 		}
 
 		fileModel := &models.BookFile{
 			ID:        uuid.NewString(),
 			Format:    ext,
 			FilePath:  finalFilePath,
-			FileSize:  info.Size(),
-			SHA256:    sha,
+			FileSize:  fileSize,
+			SHA256:    fileSHA,
 			CreatedAt: now,
 		}
 		createdFiles = append(createdFiles, fileModel)

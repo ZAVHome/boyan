@@ -55,7 +55,10 @@ func (s *Streamer) ServeBookFile(w http.ResponseWriter, r *http.Request, bookID,
 	book, _ := s.repo.GetBookByID(r.Context(), bookID)
 	downloadName := s.buildDownloadFilename(book, format)
 
-	fullPath := filepath.Join(s.libraryDir, file.FilePath)
+	fullPath := file.FilePath
+	if !filepath.IsAbs(fullPath) && s.libraryDir != "" {
+		fullPath = filepath.Join(s.libraryDir, fullPath)
+	}
 
 	// Проверяем, нужно ли стримить FB2 напрямую из архива .fb2.zip
 	reqFormat := strings.ToLower(format)

@@ -135,6 +135,7 @@ Searches are executed using `books_fts MATCH ?` with prefix matching (`*`), allo
 2. **In-Memory Streaming Without Disk Spooling:** `.fb2.zip` archives are opened via an in-memory `zip.Reader`. The parser extracts the XML stream directly into RAM buffers without ever writing temporary files to `/tmp`. Strict path normalization prevents Zip Slip vulnerabilities.
 3. **Automatic Encoding Detection:** The `html/charset` module dynamically transcodes input streams from `windows-1251`, `cp866`, or `koi8-r` into valid UTF-8.
 4. **Cover LRU Disk Cache:** Cover images are scaled to a maximum dimension of 400x500px and persisted in the cache directory. When disk usage exceeds the configured quota (default: 500 MB), the least recently accessed images are evicted automatically.
+5. **FB2 Sanitization & Repair Pipeline:** The `fb2.SanitizeFB2Bytes` routine automatically repairs malformed markup: strips UTF-8 BOM and leading whitespace, ensures root `<FictionBook>` XML namespaces (`xmlns`, `xmlns:xlink`, `xmlns:l`), and maps named HTML entities (`&nbsp;`, `&mdash;`, `&laquo;`, etc.) to numeric XML entities (`&#160;`, `&#8212;`), preventing XML parsing failures in strict browser `DOMParser` implementations and external readers.
 
 ---
 
@@ -211,15 +212,19 @@ REST API error responses use a standardized hybrid payload:
 
 #### Catalog
 
-- `GET /api/v1/books` — Paginated book listing with `search`, `page`, and `limit` parameters.
+- `GET /api/v1/books` — Paginated book listing with `search`, `page`, `limit`, filters (`genre`, `publisher`, `year`, `language`), and sorting (`sort=recent|title|author`).
 - `GET /api/v1/books/{id}` — Full book metadata and relation hierarchy.
 - `GET /api/v1/books/{id}/download` — Stream original book archive.
-- `GET /api/v1/covers/{id}` — Cover thumbnail delivery (supports `If-None-Match` and `304 Not Modified`).
+- `GET /api/v1/covers/{id}` — Cover thumbnail delivery with on-demand extraction fallback (supports `If-None-Match` and `304 Not Modified`).
 
 #### Taxonomy
 
-- `GET /api/v1/authors` — Authors list with associated book counts.
-- `GET /api/v1/series` — Book series listing.
+- `GET /api/v1/authors` — Authors list with book counts, alphabetical filtering (`letter`), and search (`search`).
+- `GET /api/v1/authors/{id}` — Author profile.
+- `GET /api/v1/authors/{id}/books` — Books by a specific author.
+- `GET /api/v1/series` — Book series listing with alphabetical filtering (`letter`) and search (`search`).
+- `GET /api/v1/series/{id}` — Series metadata.
+- `GET /api/v1/series/{id}/books` — Volumes in a series ordered by `series_index`.
 - `GET /api/v1/tags` — Canonical genre taxonomy.
 
 #### Shelves & Reading Progress
@@ -245,16 +250,17 @@ REST API error responses use a standardized hybrid payload:
   - `POST /api/v1/auth/register` — Public user registration (enabled when `allow_public_registration` is true).
 - **Book Curation & Metadata:**
   - `GET /api/v1/admin/books` — Extended book inventory with disk paths and raw metadata.
-  - `PUT /api/v1/admin/books/{id}` — Update book metadata (title, authors, series, genres, annotation, publisher, language, year) with SQLite FTS5 re-indexing.
+  - `PUT /api/v1/admin/books/{id}` — Update book metadata (title, original title, authors, series with index, genres, annotation, publisher, language, year, ISBN) with SQLite FTS5 re-indexing.
   - `DELETE /api/v1/admin/books/{id}?delete_files=true|false` — Remove book with optional physical disk file deletion.
   - `POST /api/v1/admin/books/batch` — Batch actions (bulk deletion, bulk genre/series assignment, cover regeneration).
-  - `POST /api/v1/admin/books/{id}/regenerate-cover` — Force extract cover from the original book file.
-- **Storage & Task Manager:**
-  - `POST /api/v1/admin/tasks/scan-watch` — Trigger background scan of incoming directory (`watch_dir`).
-  - `POST /api/v1/admin/tasks/rescan-library` — Trigger background rescan of the full library (`library_dir`).
-  - `GET /api/v1/admin/tasks` — Inspect active and completed background tasks and their progress.
+  - `POST /api/v1/admin/books/{id}/regenerate-cover` — Re-extract cover image from original book file.
+- **Storage & Background Tasks (Task Manager):**
+  - `POST /api/v1/admin/tasks/scan-watch` — Start background scan of incoming directory (`watch_dir`).
+  - `POST /api/v1/admin/tasks/rescan-library` — Start full rescan of library directory (`library_dir`).
+  - `POST /api/v1/admin/tasks/repair-fb2` — Start background mass inspection and sanitization of FB2 files.
+  - `GET /api/v1/admin/tasks` — Poll background task status and progress (`progress_percent`, `message`, `status`).
   - `POST /api/v1/admin/tasks/{id}/cancel` — Cancel a running background task.
-  - `POST /api/v1/admin/import/calibre` — Trigger batch Calibre library import.
+  - `POST /api/v1/admin/import/calibre` — Trigger asynchronous Calibre `metadata.db` import.
 - **Quarantine Moderation:**
   - `GET /api/v1/admin/quarantine` — List quarantined duplicate files.
   - `POST /api/v1/admin/quarantine/{id}/restore` — Force import quarantined file into the library.

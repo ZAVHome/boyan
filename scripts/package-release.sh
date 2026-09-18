@@ -17,7 +17,7 @@ mkdir -p "${STAGING_DIR}"
 echo "==> 1. Сборка Go бэкенда для Linux (amd64, без CGO)..."
 (
     cd "${ROOT_DIR}/backend"
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o "${STAGING_DIR}/boyan" ./cmd/server
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -ldflags="-s -w" -o "${STAGING_DIR}/boyan" ./cmd/server
 )
 
 echo "==> 2. Сборка десктопного фронтенда (web-desktop)..."

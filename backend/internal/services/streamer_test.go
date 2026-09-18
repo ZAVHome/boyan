@@ -86,3 +86,59 @@ func TestStreamer_StreamFB2FromZIP(t *testing.T) {
 		t.Errorf("streamed content mismatch: expected '%s', got '%s'", expectedFB2Content, body)
 	}
 }
+
+func TestStreamer_ServeBookFile_AbsolutePath(t *testing.T) {
+	ctx := context.Background()
+	tmpDir, err := os.MkdirTemp("", "streamer_abs_test_*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	libraryDir := filepath.Join(tmpDir, "library")
+	_ = os.MkdirAll(libraryDir, 0755)
+
+	pool, err := storage.NewSQLitePool(ctx, dbPath, 5000, 16000)
+	if err != nil {
+		t.Fatalf("NewSQLitePool: %v", err)
+	}
+	defer pool.Close()
+
+	_ = storage.RunMigrations(ctx, pool.Writer)
+	bookRepo := storage.NewBookRepository(pool)
+
+	// Создаем тестовый файл с абсолютным путем (как делает Calibre импорт)
+	absFilePath := filepath.Join(libraryDir, "author", "book.fb2")
+	_ = os.MkdirAll(filepath.Dir(absFilePath), 0755)
+	expectedContent := "<FictionBook><body><p>Direct File Content</p></body></FictionBook>"
+	if err := os.WriteFile(absFilePath, []byte(expectedContent), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	book := &models.Book{
+		ID:    "stream-book-abs",
+		Title: "Абсолютный путь",
+	}
+	file := &models.BookFile{
+		Format:   "fb2",
+		FilePath: absFilePath, // Сохраняем абсолютный путь!
+		FileSize: int64(len(expectedContent)),
+		SHA256:   "11223344",
+	}
+	_ = bookRepo.SaveBook(ctx, book, nil, nil, nil, file)
+
+	streamer := services.NewStreamer(bookRepo, libraryDir, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/download/fb2", nil)
+	streamer.ServeBookFile(rec, req, "stream-book-abs", "fb2")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for absolute path fb2, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if rec.Body.String() != expectedContent {
+		t.Errorf("content mismatch: expected '%s', got '%s'", expectedContent, rec.Body.String())
+	}
+}

@@ -175,12 +175,32 @@ func TestStorage_FullFlow(t *testing.T) {
 	}
 
 	// 8. Проверка сортировки книг
-	booksSortedByTitle, _, err := bookRepo.ListBooksSorted(ctx, 0, 10, "title")
+	booksSortedByTitle, _, err := bookRepo.ListBooksSorted(ctx, 0, 10, "title", "asc")
 	if err != nil {
 		t.Fatalf("ListBooksSorted by title failed: %v", err)
 	}
 	if len(booksSortedByTitle) != 2 {
 		t.Errorf("expected 2 books, got %d", len(booksSortedByTitle))
+	}
+
+	booksSortedBySeries, _, err := bookRepo.ListBooksSorted(ctx, 0, 10, "series", "asc")
+	if err != nil {
+		t.Fatalf("ListBooksSorted by series failed: %v", err)
+	}
+	if len(booksSortedBySeries) != 2 {
+		t.Errorf("expected 2 books, got %d", len(booksSortedBySeries))
+	}
+	// Книга с серией ("book-uuid-2" имеет серию "Мир") должна быть первой
+	if len(booksSortedBySeries[0].Series) == 0 {
+		t.Errorf("expected book with series to be first, got: %s", booksSortedBySeries[0].Title)
+	}
+
+	booksSortedByYear, _, err := bookRepo.ListBooksSorted(ctx, 0, 10, "year", "desc")
+	if err != nil {
+		t.Fatalf("ListBooksSorted by year failed: %v", err)
+	}
+	if len(booksSortedByYear) != 2 {
+		t.Errorf("expected 2 books, got %d", len(booksSortedByYear))
 	}
 
 	// 9. Проверка параллельного чтения в WAL-режиме
@@ -196,5 +216,79 @@ func TestStorage_FullFlow(t *testing.T) {
 	}
 	for i := 0; i < 5; i++ {
 		<-done
+	}
+
+	// 10. Проверка поиска с фильтрацией (SearchBooksWithFilter)
+	// Фильтр по жанру
+	booksByGenre, gTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Genre: "prose_classic",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter by genre failed: %v", err)
+	}
+	if gTotal != 1 || len(booksByGenre) != 1 || booksByGenre[0].ID != "book-uuid-1" {
+		t.Errorf("expected 1 book for genre 'prose_classic', got %d", gTotal)
+	}
+
+	// Фильтр по издательству
+	booksByPub, pTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Publisher: "Художественная",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter by publisher failed: %v", err)
+	}
+	if pTotal != 1 || len(booksByPub) != 1 || booksByPub[0].ID != "book-uuid-1" {
+		t.Errorf("expected 1 book for publisher 'Художественная', got %d", pTotal)
+	}
+
+	// Фильтр по году издания
+	booksByYear, yTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Year:  "1967",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter by year failed: %v", err)
+	}
+	if yTotal != 1 || len(booksByYear) != 1 || booksByYear[0].ID != "book-uuid-1" {
+		t.Errorf("expected 1 book for year '1967', got %d", yTotal)
+	}
+
+	// Фильтр по языку
+	booksByLang, lTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Language: "ru",
+		Limit:    10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter by language failed: %v", err)
+	}
+	if lTotal != 2 || len(booksByLang) != 2 {
+		t.Errorf("expected 2 books for language 'ru', got %d", lTotal)
+	}
+
+	// Комбинированный фильтр: FTS-запрос + фильтр по жанру
+	combinedBooks, cTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Query: "Булгаков",
+		Genre: "prose_classic",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter combined failed: %v", err)
+	}
+	if cTotal != 1 || len(combinedBooks) != 1 || combinedBooks[0].ID != "book-uuid-1" {
+		t.Errorf("expected 1 book for combined query and genre filter, got %d", cTotal)
+	}
+
+	// Несуществующий год издания
+	noBooks, nTotal, err := bookRepo.SearchBooksWithFilter(ctx, storage.BookFilter{
+		Year:  "1812",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("SearchBooksWithFilter non-matching year failed: %v", err)
+	}
+	if nTotal != 0 || len(noBooks) != 0 {
+		t.Errorf("expected 0 books for year '1812', got %d", nTotal)
 	}
 }

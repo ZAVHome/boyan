@@ -38,15 +38,33 @@
         <h2 class="text-sm font-semibold text-theme-text line-clamp-2 leading-snug mb-1">
           {{ book.title }}
         </h2>
-        <p class="text-xs text-theme-muted truncate mb-1">
-          {{ authorNames }}
-        </p>
+        <div class="text-xs text-theme-muted truncate mb-1">
+          <span v-if="book.authors && book.authors.length > 0">
+            <span v-for="(a, idx) in book.authors" :key="a.id || idx">
+              <button
+                type="button"
+                @click.stop="searchBy(a.name)"
+                class="hover:underline hover:text-theme-text"
+              >
+                {{ a.name }}
+              </button>
+              <span v-if="idx < book.authors.length - 1">, </span>
+            </span>
+          </span>
+          <span v-else>{{ authorNames }}</span>
+        </div>
         <p
           v-if="book.series && book.series.length > 0"
           class="text-[11px] text-primary-600 dark:text-primary-400 truncate"
         >
-          {{ book.series[0].name }}
-          <span v-if="book.series[0].index">#{{ book.series[0].index }}</span>
+          <button
+            type="button"
+            @click.stop="searchBy(book.series[0].name)"
+            class="hover:underline text-left"
+          >
+            {{ book.series[0].name }}
+            <span v-if="book.series[0].index">#{{ book.series[0].index }}</span>
+          </button>
         </p>
       </div>
 
@@ -76,10 +94,13 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Book as BookIcon, BookOpen, Check } from 'lucide-vue-next'
 import { api } from '@/api/client'
 import type { Book } from '@/api/types'
 import { useOfflineStore } from '@/stores/offline'
+
+const router = useRouter()
 
 const props = defineProps<{
   book: Book
@@ -102,4 +123,8 @@ const authorNames = computed(() => {
 })
 
 const isOffline = computed(() => offlineStore.isBookSaved(props.book.id))
+
+function searchBy(query: string) {
+  router.push({ name: 'search', query: { q: query } })
+}
 </script>

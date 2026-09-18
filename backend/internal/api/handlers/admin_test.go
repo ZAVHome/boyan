@@ -68,7 +68,7 @@ func setupAdminTestRouter(t *testing.T) (*chi.Mux, string, string, *config.Confi
 	adminDashboardH := NewAdminDashboardHandler(cfg, pool, bookRepo)
 	adminUsersH := NewAdminUsersHandler(userRepo)
 	adminBooksH := NewAdminBooksHandler(cfg, bookRepo, coverCache)
-	adminTasksH := NewAdminTasksHandler(taskManager, watcherInstance, cfg)
+	adminTasksH := NewAdminTasksHandler(taskManager, watcherInstance, cfg, bookRepo)
 	adminSettingsH := NewAdminSettingsHandler(cfg, cfgPath)
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -87,6 +87,7 @@ func setupAdminTestRouter(t *testing.T) (*chi.Mux, string, string, *config.Confi
 			r.Delete("/admin/users/{id}", adminUsersH.DeleteUser)
 
 			r.Get("/admin/books", adminBooksH.ListBooks)
+			r.Post("/admin/storage/repair-fb2", adminTasksH.RunRepairFB2)
 			r.Get("/admin/tasks", adminTasksH.ListTasks)
 			r.Get("/admin/settings", adminSettingsH.GetSettings)
 			r.Put("/admin/settings", adminSettingsH.UpdateSettings)
@@ -251,4 +252,19 @@ func TestAdminAPI_Settings(t *testing.T) {
 		t.Fatalf("update settings failed: %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestAdminAPI_RepairFB2(t *testing.T) {
+	router, adminToken, _, _, pool := setupAdminTestRouter(t)
+	defer pool.Close()
+
+	req, _ := http.NewRequest("POST", "/api/v1/admin/storage/repair-fb2", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 

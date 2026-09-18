@@ -271,6 +271,17 @@ func (w *Watcher) ProcessFile(ctx context.Context, sourcePath, originalFilename 
 		return nil, fmt.Errorf("file is empty")
 	}
 
+	// Автоматическая санитизация FB2 перед анализом и сохранением в библиотеку
+	lowerName := strings.ToLower(originalFilename)
+	lowerPath := strings.ToLower(sourcePath)
+	if strings.HasSuffix(lowerName, ".fb2") || strings.HasSuffix(lowerPath, ".fb2") {
+		if modified, err := fb2.SanitizeFB2File(sourcePath); err == nil && modified {
+			if updatedInfo, err := os.Stat(sourcePath); err == nil {
+				fileInfo = updatedInfo
+			}
+		}
+	}
+
 	// 1. Определение формата и парсинг книги
 	format, innerPath, bookInfo, err := w.parseBook(sourcePath, originalFilename)
 	if err != nil {

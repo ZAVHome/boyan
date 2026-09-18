@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"boyan/internal/i18n"
+	"boyan/internal/parsers/fb2"
 	"boyan/internal/watcher"
 )
 
@@ -53,6 +55,11 @@ func (h *UploadHandler) UploadBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tempFile.Close()
+
+	// Автоматическая санитизация входящих FB2 файлов перед инжестом
+	if strings.HasSuffix(strings.ToLower(header.Filename), ".fb2") {
+		_, _ = fb2.SanitizeFB2File(tempPath)
+	}
 
 	// Запускаем пайплайн обработки через Watcher
 	res, err := h.watcher.ProcessFile(r.Context(), tempPath, header.Filename)
